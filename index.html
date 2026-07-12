@@ -270,6 +270,7 @@ loadImage('cake', 'assets/cake.png');
 loadImage('gift', 'assets/gift.png');
 loadImage('street', 'assets/street.png');
 loadImage('sun', 'assets/sun.png');
+loadImage('bike', 'assets/bike.png');
 // REPLACE: no dedicated 26th-birthday photo yet — drop one in and uncomment:
 // loadImage('birthday26', 'assets/birthday26.jpg');
 
@@ -1039,29 +1040,37 @@ function drawItems() {
 }
 
 function drawBike(sx, baseY) {
-  // REPLACE: bike sprite placeholder — simple penny-farthing silhouette,
-  // drawn behind the player so the big wheel reads as "under/behind her"
-  // rather than through her body.
   const bodyW = playerWidth();
-  const wheelR = playerHeight() * 0.34;
-  const smallR = wheelR * 0.4;
   const hubX = sx - bodyW * 0.15;
-  ctx.save();
-  ctx.strokeStyle = "#2b1a0d";
-  ctx.lineWidth = Math.max(2, wheelR * 0.09);
-  ctx.beginPath();
-  ctx.arc(hubX, baseY - wheelR, wheelR, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(hubX - wheelR * 1.15, baseY - smallR, smallR, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(hubX, baseY - wheelR);
-  ctx.lineTo(hubX - wheelR * 1.15, baseY - smallR);
-  ctx.lineTo(hubX - wheelR * 0.3, baseY - wheelR * 1.55);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.restore();
+  if (imgReady('bike')) {
+    // real penny-farthing illustration — big wheel sits at ~72% across
+    // the image, anchored so that wheel touches the ground at hubX
+    const height = playerHeight() * 1.15;
+    const width = height * aspectOf('bike', 1);
+    ctx.drawImage(images.bike, hubX - width * 0.72, baseY - height, width, height);
+  } else {
+    // REPLACE: bike sprite placeholder — simple penny-farthing silhouette,
+    // drawn behind the player so the big wheel reads as "under/behind her"
+    // rather than through her body.
+    const wheelR = playerHeight() * 0.34;
+    const smallR = wheelR * 0.4;
+    ctx.save();
+    ctx.strokeStyle = "#2b1a0d";
+    ctx.lineWidth = Math.max(2, wheelR * 0.09);
+    ctx.beginPath();
+    ctx.arc(hubX, baseY - wheelR, wheelR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(hubX - wheelR * 1.15, baseY - smallR, smallR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(hubX, baseY - wheelR);
+    ctx.lineTo(hubX - wheelR * 1.15, baseY - smallR);
+    ctx.lineTo(hubX - wheelR * 0.3, baseY - wheelR * 1.55);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawPlayer() {
