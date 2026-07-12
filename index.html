@@ -42,7 +42,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: clamp(10px, 2.2vh, 20px);
+    gap: clamp(12px, 2.4vh, 22px);
     text-align: center;
     padding: 6vh 6vw;
     background:
@@ -52,34 +52,38 @@
   }
   .overlay.hidden { display: none; }
 
+  #splashScreen {
+    z-index: 22;
+    background: #14100a;
+  }
+  #splashVideo {
+    max-width: 92vw;
+    max-height: 68vh;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+  #splashScreen p {
+    color: #f2e2bd;
+    background: rgba(255,255,255,0.12);
+  }
+
   .overlay h1 {
     font-family: 'Playfair Display', serif;
     font-weight: 900;
-    font-size: clamp(1.5rem, 5.6vw, 2.6rem);
+    font-size: clamp(1.8rem, 6.6vw, 3.1rem);
     margin: 0;
     line-height: 1.25;
     text-shadow: 0 2px 0 rgba(255,255,255,0.3);
   }
   .overlay p {
-    font-size: clamp(0.95rem, 3.2vw, 1.3rem);
+    font-size: clamp(1.1rem, 3.8vw, 1.55rem);
     margin: 0;
     font-weight: 500;
     opacity: 0.9;
   }
-  .hint {
-    font-family: 'Special Elite', monospace;
-    font-size: clamp(0.68rem, 2.1vw, 0.85rem) !important;
-    opacity: 0.65 !important;
-    font-weight: 400 !important;
-  }
-  .hint.unlocked {
-    opacity: 1 !important;
-    color: #7a2530;
-    font-weight: 700 !important;
-  }
   .controlsHint {
     font-family: 'Special Elite', monospace;
-    font-size: clamp(0.72rem, 2.2vw, 0.9rem) !important;
+    font-size: clamp(0.85rem, 2.6vw, 1.05rem) !important;
     opacity: 0.85 !important;
     background: rgba(43,26,13,0.1);
     border: 1px solid rgba(43,26,13,0.3);
@@ -89,7 +93,7 @@
 
   .bigBtn {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(1.3rem, 5vw, 2rem);
+    font-size: clamp(1.5rem, 5.6vw, 2.3rem);
     font-weight: 900;
     color: #f2e2bd;
     background: #5c3a20;
@@ -122,8 +126,8 @@
     background: rgba(43,26,13,0.75);
     color: #f2e2bd;
     font-weight: 700;
-    font-size: clamp(1rem, 4vw, 1.4rem);
-    padding: 0.35em 1em;
+    font-size: clamp(1.2rem, 4.6vw, 1.7rem);
+    padding: 0.4em 1.1em;
     border-radius: 6px;
     border: 1px solid rgba(242,226,189,0.4);
   }
@@ -142,7 +146,7 @@
   #eggMessage.show { opacity: 1; }
   #eggMessage span {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(1.5rem, 6.5vw, 3.2rem);
+    font-size: clamp(1.7rem, 7.5vw, 3.6rem);
     font-weight: 900;
     color: #2b1a0d;
     background: rgba(242,226,189,0.92);
@@ -185,8 +189,8 @@
   }
   #egg26Panel.show { display: flex; }
   #egg26PhotoBox {
-    width: min(52vw, 220px);
-    height: min(52vw, 220px);
+    width: min(64vw, 320px);
+    height: min(64vw, 320px);
     border-radius: 4px;
     background: linear-gradient(135deg, #d9c39a, #f2e2bd);
     display: flex;
@@ -195,33 +199,37 @@
     font-size: 3rem;
     overflow: hidden;
   }
-  #egg26PhotoBox img { width: 100%; height: 100%; object-fit: cover; }
+  #egg26PhotoBox img, #egg26PhotoBox video { width: 100%; height: 100%; object-fit: cover; }
 </style>
 </head>
 <body>
 
 <canvas id="gameCanvas"></canvas>
 
-<div id="hud" class="hidden"><div class="pill">🎂 <span id="scoreDisplay">0</span></div></div>
+<div id="hud" class="hidden"><div class="pill">Punkte: <span id="scoreDisplay">0</span></div></div>
 
 <div id="flashOverlay"></div>
 <div id="eggMessage"><span id="eggMessageText"></span></div>
 
-<div id="startScreen" class="overlay">
-  <h1>Happy Birthday, <span id="nameSpan"></span>! 🎂</h1>
-  <p>Lauf dem Arzt davon! 🏃&zwj;♀️</p>
+<div id="splashScreen" class="overlay">
+  <video id="splashVideo" src="assets/silly_walk.mp4" autoplay muted playsinline></video>
+  <p class="controlsHint">Tippen zum Überspringen</p>
+</div>
+
+<div id="startScreen" class="overlay hidden">
+  <h1>Happy Birthday, <span id="nameSpan"></span>!</h1>
+  <p>Escape the Doctor</p>
   <button id="startBtn" class="bigBtn">START</button>
-  <p class="controlsHint">⬆️ Tippen oben = Springen &nbsp;|&nbsp; ⬇️ Halten unten = Ducken</p>
-  <p class="hint" id="secretHint">(Tippe ein Geheimwort für eine Überraschung...)</p>
+  <p class="controlsHint">Oben tippen = Springen &nbsp;|&nbsp; Unten halten = Ducken</p>
 </div>
 
 <div id="gameOverScreen" class="overlay hidden">
   <h1>Game Over</h1>
-  <p>Sie haben einen Bandscheibenvorfall... 😅</p>
+  <p>Sie haben einen Bandscheibenvorfall...</p>
   <p id="finalScore">Punkte: 0</p>
   <div id="egg26Panel">
-    <div id="egg26PhotoBox">🎂</div>
-    <p style="margin:0;font-weight:800;color:#7a2530;">Alles Gute zum 26., Katalin! 🎉</p>
+    <div id="egg26PhotoBox"></div>
+    <p style="margin:0;font-weight:800;color:#7a2530;">Alles Gute zum 26., Katalin!</p>
   </div>
   <button id="retryBtn" class="bigBtn">Nochmal?</button>
 </div>
@@ -256,7 +264,7 @@ function aspectOf(key, fallback) {
   return (img && img.naturalWidth) ? img.naturalWidth / img.naturalHeight : fallback;
 }
 
-loadImage('head', 'assets/head.png');
+loadImage('player', 'assets/player.png'); // full-body photo cut-out
 loadImage('doctor', 'assets/doctor.png');
 loadImage('cake', 'assets/cake.png');
 loadImage('gift', 'assets/gift.png');
@@ -267,6 +275,31 @@ const GROUND_OBSTACLE_KEYS = ['ground_scroll', 'ground_rockface', 'ground_books'
 const OVERHANG_OBSTACLE_KEYS = ['overhang_stethoscope', 'overhang_chandelier', 'overhang_pocketwatch', 'overhang_skeleton', 'overhang_bunting'];
 for (const k of GROUND_OBSTACLE_KEYS) loadImage(k, 'assets/' + k + '.png');
 for (const k of OVERHANG_OBSTACLE_KEYS) loadImage(k, 'assets/' + k + '.png');
+
+const BG_LAYER_KEYS = ['background_1', 'background_2', 'background_3'];
+for (const k of BG_LAYER_KEYS) loadImage(k, 'assets/' + k + '.png');
+const PEEK_HEAD_KEYS = ['peekhead_1', 'peekhead_2', 'peekhead_3', 'peekhead_4', 'peekhead_5'];
+for (const k of PEEK_HEAD_KEYS) loadImage(k, 'assets/' + k + '.png');
+
+/* ============================================================
+   SPLASH VIDEO — plays once on page load, then reveals Start
+   ============================================================ */
+(function setupSplash() {
+  const splash = document.getElementById('splashScreen');
+  const video = document.getElementById('splashVideo');
+  let dismissed = false;
+  function dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    splash.classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+    try { video.pause(); } catch (e) {}
+  }
+  video.addEventListener('ended', dismiss);
+  video.addEventListener('error', dismiss);
+  splash.addEventListener('pointerdown', dismiss);
+  setTimeout(dismiss, 12000); // safety net if autoplay is blocked
+})();
 
 /* ============================================================
    CANVAS / RESPONSIVE SETUP
@@ -316,11 +349,9 @@ const BIKE_SPEED_MULT = 1.4;
 
 const PLAYER_SCREEN_X_RATIO = 0.24;
 
-const STAND_BODY_H = () => H * 0.10;
-const STAND_BODY_W = () => H * 0.078;
-const DUCK_BODY_H = () => H * 0.045;
-const DUCK_BODY_W = () => H * 0.10;
-const HEAD_D = () => H * 0.072;
+// total on-screen height of the player sprite (bigger = easier to see)
+const PLAYER_STAND_H = () => H * 0.20;
+const PLAYER_DUCK_H = () => H * 0.14;
 
 const player = {
   hoverY: 0, vy: 0,          // hoverY = height above ground baseline
@@ -333,10 +364,10 @@ const player = {
 };
 
 function playerHeight() {
-  return (player.duckHeld && player.grounded ? DUCK_BODY_H() : STAND_BODY_H()) + HEAD_D();
+  return player.duckHeld && player.grounded ? PLAYER_DUCK_H() : PLAYER_STAND_H();
 }
 function playerWidth() {
-  return player.duckHeld && player.grounded ? DUCK_BODY_W() : STAND_BODY_W();
+  return playerHeight() * aspectOf('player', 600 / 900);
 }
 
 const doctor = {
@@ -347,7 +378,7 @@ const doctor = {
 };
 
 function doctorSize() {
-  const height = H * 0.17;
+  const height = H * 0.19;
   const width = height * aspectOf('doctor', 0.5625);
   return { width, height };
 }
@@ -460,12 +491,7 @@ window.addEventListener("keydown", (e) => {
   if (state === "start") {
     if (/^[a-zA-Z]$/.test(e.key)) {
       typedBuffer = (typedBuffer + e.key.toUpperCase()).slice(-20);
-      if (typedBuffer.includes("GEBURTSTAG") && !secretUnlocked) {
-        secretUnlocked = true;
-        const hint = document.getElementById("secretHint");
-        hint.textContent = "✨ Geheimnis freigeschaltet: unendliche Doppelsprünge! ✨";
-        hint.classList.add("unlocked");
-      }
+      if (typedBuffer.includes("GEBURTSTAG")) secretUnlocked = true; // silent easter egg, no on-screen hint
     }
   } else if (state === "playing") {
     if (e.code === "Space" || e.code === "ArrowUp") tryJump();
@@ -481,41 +507,44 @@ document.getElementById("startBtn").addEventListener("click", beginIntro);
 document.getElementById("retryBtn").addEventListener("click", beginIntro);
 
 /* ============================================================
-   PROCEDURAL VINTAGE BACKGROUND (aged paper sky, ink mountains)
+   BACKGROUND — real illustrated parallax mountains + peeking heads
    ============================================================ */
-function seededRand(seed) {
-  let s = seed;
-  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-}
-
-const CHUNK_W = 2400; // virtual px period for tiling background layers
-
-function buildRidge(seed, segments, baseRatio, ampRatio) {
-  const rand = seededRand(seed);
-  const pts = [];
-  const step = CHUNK_W / segments;
-  for (let x = -step; x <= CHUNK_W + step; x += step) {
-    pts.push({ x, r: baseRatio + (rand() * 2 - 1) * ampRatio });
+function drawBgLayer(key, targetHeight, parallax, baselineY) {
+  const img = images[key];
+  if (!img || !img.complete || !img.naturalWidth) return;
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const h = targetHeight;
+  const w = h * aspect;
+  const offset = (cameraX * parallax) % w;
+  const count = Math.ceil(W / w) + 2;
+  for (let i = -1; i <= count; i++) {
+    ctx.drawImage(img, -offset + i * w, baselineY - h, w, h);
   }
-  return pts;
 }
-const ridgeBack = buildRidge(11, 22, 0.50, 0.10);
-const ridgeMid = buildRidge(37, 26, 0.60, 0.09);
-const ridgeFront = buildRidge(73, 30, 0.70, 0.08);
 
-function drawRidge(ridge, parallax, color) {
-  const offset = (cameraX * parallax) % CHUNK_W;
-  ctx.fillStyle = color;
-  for (let rep = -1; rep <= 1; rep++) {
-    ctx.beginPath();
-    ctx.moveTo(-offset + rep * CHUNK_W + ridge[0].x, H);
-    for (const p of ridge) {
-      ctx.lineTo(-offset + rep * CHUNK_W + p.x, H * p.r);
+let peek = { active: false, key: null, x: 0, timer: 2 + Math.random() * 3 };
+function updatePeek(dt) {
+  peek.timer -= dt;
+  if (peek.timer <= 0) {
+    if (peek.active) {
+      peek.active = false;
+      peek.timer = 3 + Math.random() * 5;
+    } else {
+      peek.active = true;
+      peek.key = PEEK_HEAD_KEYS[(Math.random() * PEEK_HEAD_KEYS.length) | 0];
+      peek.x = W * (0.15 + Math.random() * 0.7);
+      peek.timer = 1.8 + Math.random() * 1.4;
     }
-    ctx.lineTo(-offset + rep * CHUNK_W + ridge[ridge.length - 1].x, H);
-    ctx.closePath();
-    ctx.fill();
   }
+}
+function drawPeek() {
+  if (!peek.active || !imgReady(peek.key)) return;
+  const img = images[peek.key];
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const h = H * 0.12;
+  const w = h * aspect;
+  const y = groundY() - H * 0.36 + Math.sin(elapsed * 2) * H * 0.006;
+  ctx.drawImage(img, peek.x - w / 2, y - h, w, h);
 }
 
 function drawBackground() {
@@ -546,10 +575,11 @@ function drawBackground() {
   ctx.lineWidth = Math.max(2, H * 0.004);
   ctx.stroke();
 
-  // mountain ridges (back to front, ink/sepia silhouettes)
-  drawRidge(ridgeBack, 0.10, "#ab8c62");
-  drawRidge(ridgeMid, 0.22, "#8c6c46");
-  drawRidge(ridgeFront, 0.38, "#6b4e2f");
+  // real illustrated mountain ranges, back to front
+  drawBgLayer('background_1', H * 0.42, 0.12, groundY() + H * 0.01);
+  drawBgLayer('background_2', H * 0.50, 0.24, groundY() + H * 0.015);
+  drawPeek();
+  drawBgLayer('background_3', H * 0.58, 0.40, groundY() + H * 0.02);
 
   // haze near the mountain base
   const mist = ctx.createLinearGradient(0, groundY() - H * 0.12, 0, groundY());
@@ -598,12 +628,12 @@ function resetWorld() {
   obstacles = [];
   items = [];
   particles = [];
-  spawnCursor = W * 0.9;
+  spawnCursor = H * 1.2;
 }
 
 function generateAhead() {
-  while (spawnCursor < cameraX + W * 2.2) {
-    const gap = W * (0.42 + Math.random() * 0.34);
+  while (spawnCursor < cameraX + W * 1.6 + H * 1.5) {
+    const gap = H * (0.55 + Math.random() * 0.5);
     spawnCursor += gap;
 
     if (!bikeActive) {
@@ -623,9 +653,9 @@ function generateAhead() {
 
     // sprinkle a collectible in the clear stretch that follows
     if (Math.random() < 0.8) {
-      const itemGap = W * (0.10 + Math.random() * 0.16);
+      const itemGap = H * (0.13 + Math.random() * 0.2);
       const ix = spawnCursor + itemGap;
-      const size = H * 0.045;
+      const size = H * 0.055;
       const arcHeight = Math.random() < 0.4 ? H * 0.20 : 0;
       items.push({
         kind: Math.random() < 0.55 ? "cake" : "gift",
@@ -635,7 +665,7 @@ function generateAhead() {
       });
       spawnCursor = ix + size;
     }
-    spawnCursor += H * 0.05;
+    spawnCursor += H * 0.06;
   }
 }
 
@@ -651,7 +681,7 @@ function resetGame() {
   score = 0;
   elapsed = 0;
   cameraX = 0;
-  scrollSpeed = W * 0.22;
+  scrollSpeed = H * 0.40;
   egg1307Fired = false;
   doctorDancing = false;
   bikePowerupFired = false;
@@ -666,7 +696,7 @@ function resetGame() {
   player.mouthOpenUntil = 0;
   player.sparkleUntil = 0;
 
-  doctor.worldX = cameraX + W * PLAYER_SCREEN_X_RATIO - W * 0.42;
+  doctor.worldX = cameraX + W * PLAYER_SCREEN_X_RATIO - H * 0.62;
 
   resetWorld();
   generateAhead();
@@ -698,16 +728,16 @@ function gameOver() {
   document.getElementById("eggMessage").classList.remove("show");
   document.getElementById("finalScore").textContent = "Punkte: " + score;
   const panel = document.getElementById("egg26Panel");
+  const box = document.getElementById("egg26PhotoBox");
   if (score === 26) {
     panel.classList.add("show");
-    if (imgReady("birthday26")) {
-      document.getElementById("egg26PhotoBox").innerHTML =
-        '<img src="' + images.birthday26.src + '" alt="Katalin">';
-    }
+    box.innerHTML = '<video src="assets/Monty_Happy_Birthday.mp4" autoplay loop muted playsinline ' +
+      'style="cursor:pointer;" onclick="this.muted = !this.muted;"></video>';
     spawnConfetti(140);
     playChime();
   } else {
     panel.classList.remove("show");
+    box.innerHTML = "";
   }
   document.getElementById("gameOverScreen").classList.remove("hidden");
 }
@@ -731,7 +761,7 @@ function triggerEgg1307() {
   doctorDancing = true;
   doctorDanceEnd = elapsed + 10;
   playJingle();
-  showEggMessage("DR. BANDSCHEIBE TANZT! 💃🕺", 2200);
+  showEggMessage("DR. BANDSCHEIBE TANZT!", 2200);
 }
 
 function triggerBikePowerup() {
@@ -741,7 +771,7 @@ function triggerBikePowerup() {
   // clear the track ahead for a clean straight ride
   obstacles = obstacles.filter(o => o.x < cameraX);
   playBikeBell();
-  showEggMessage("YOU GET MARK CAVENDISH!! 🚴💨", 2200);
+  showEggMessage("YOU GET MARK CAVENDISH!!", 2200);
 }
 
 function spawnConfetti(n) {
@@ -830,12 +860,15 @@ function update(dt) {
 
   if (bikeActive && elapsed >= bikeEndTime) bikeActive = false;
 
-  const baseSpeed = Math.min(W * 0.70, W * 0.22 + elapsed * W * 0.0045);
+  // speed is H-based (not W-based) so obstacle-clear timing stays fair
+  // regardless of the device's screen aspect ratio (portrait vs desktop)
+  const baseSpeed = Math.min(H * 0.95, H * 0.40 + elapsed * H * 0.008);
   scrollSpeed = bikeActive ? baseSpeed * BIKE_SPEED_MULT : baseSpeed;
   cameraX += scrollSpeed * dt;
 
   generateAhead();
   pruneBehindCamera();
+  updatePeek(dt);
 
   const playerScreenX = W * PLAYER_SCREEN_X_RATIO;
   const playerWorldX = cameraX + playerScreenX;
@@ -852,7 +885,7 @@ function update(dt) {
   } else {
     player.grounded = false;
   }
-  player.runPhase += dt * (5 + scrollSpeed / W * 4);
+  player.runPhase += dt * (5 + scrollSpeed / H * 4);
 
   const pW = playerWidth();
   const pH = playerHeight();
@@ -908,7 +941,7 @@ function update(dt) {
     const speedMul = 0.80 + Math.min(0.32, elapsed * 0.0016) + wobble;
     doctor.worldX += baseSpeed * speedMul * dt;
   }
-  const maxTrailScreen = W * 0.60;
+  const maxTrailScreen = H * 0.85;
   const minDoctorWorldX = cameraX + playerScreenX - maxTrailScreen;
   if (doctor.worldX < minDoctorWorldX) doctor.worldX = minDoctorWorldX;
   doctor.bouncePhase += dt * 6;
@@ -991,7 +1024,7 @@ function drawBike(sx, baseY) {
   // REPLACE: bike sprite placeholder — simple penny-farthing silhouette,
   // drawn behind the player so the big wheel reads as "under/behind her"
   // rather than through her body.
-  const bodyW = STAND_BODY_W();
+  const bodyW = playerWidth();
   const wheelR = playerHeight() * 0.34;
   const smallR = wheelR * 0.4;
   const hubX = sx - bodyW * 0.15;
@@ -1015,90 +1048,56 @@ function drawBike(sx, baseY) {
 
 function drawPlayer() {
   const sx = W * PLAYER_SCREEN_X_RATIO;
-  const ducking = player.duckHeld && player.grounded;
-  const bodyW = ducking ? DUCK_BODY_W() : STAND_BODY_W();
-  const bodyH = ducking ? DUCK_BODY_H() : STAND_BODY_H();
-  const headD = HEAD_D();
+  const pH = playerHeight();
+  const pW = playerWidth();
   const bounce = player.grounded ? Math.abs(Math.sin(player.runPhase)) * H * 0.008 : 0;
   const baseY = groundY() - player.hoverY - bounce;
-  const bodyTop = baseY - bodyH;
-  const cx = sx + bodyW / 2;
+  const top = baseY - pH;
 
   if (bikeActive) drawBike(sx, baseY);
 
   ctx.save();
-  // REPLACE: player body placeholder — simple Victorian silhouette.
-  ctx.fillStyle = "#7a2530";
-  roundRect(sx, bodyTop, bodyW, bodyH, bodyW * 0.3);
-  ctx.fill();
-  ctx.strokeStyle = "#2b1a0d";
-  ctx.lineWidth = 2;
-  roundRect(sx, bodyTop, bodyW, bodyH, bodyW * 0.3);
-  ctx.stroke();
-  ctx.fillStyle = "#c9a24a";
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.arc(cx, bodyTop + bodyH * (0.25 + i * 0.25), bodyW * 0.05, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  if (imgReady("player")) {
+    ctx.drawImage(images.player, sx, top, pW, pH);
 
-  // head
-  const headCx = cx;
-  const headCy = bodyTop - headD * 0.42;
-  if (imgReady("head")) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(headCx, headCy, headD / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(images.head, headCx - headD / 2, headCy - headD / 2, headD, headD);
-    ctx.restore();
-    ctx.strokeStyle = "#2b1a0d";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(headCx, headCy, headD / 2, 0, Math.PI * 2);
-    ctx.stroke();
-    if (elapsed < player.sparkleUntil) drawHeadSparkle(headCx, headCy, headD);
-  } else {
-    // REPLACE: player head placeholder — simple cartoon face.
-    ctx.fillStyle = "#ffd9c2";
-    ctx.beginPath();
-    ctx.arc(headCx, headCy, headD / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#2b1a0d";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = "#2b1a0d";
-    ctx.beginPath(); ctx.arc(headCx - headD * 0.17, headCy - headD * 0.04, headD * 0.06, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(headCx + headD * 0.17, headCy - headD * 0.04, headD * 0.06, 0, Math.PI * 2); ctx.fill();
-
-    const mouthOpen = elapsed < player.mouthOpenUntil;
-    ctx.fillStyle = "#7a2530";
-    if (mouthOpen) {
+    // mouth-open reaction overlay — the source is a static photo, so a
+    // literal mouth can't animate; we fake it with a small drawn shape
+    // positioned over her mouth (fractions tuned to this specific photo).
+    if (elapsed < player.mouthOpenUntil) {
+      const mx = sx + pW * 0.55;
+      const my = top + pH * 0.32;
+      ctx.fillStyle = "#5a2020";
       ctx.beginPath();
-      ctx.ellipse(headCx, headCy + headD * 0.18, headD * 0.16, headD * 0.20, 0, 0, Math.PI * 2);
+      ctx.ellipse(mx, my, pW * 0.045, pW * 0.06, 0, 0, Math.PI * 2);
       ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.arc(headCx, headCy + headD * 0.1, headD * 0.14, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.lineWidth = headD * 0.05;
-      ctx.strokeStyle = "#7a2530";
-      ctx.stroke();
     }
+    if (elapsed < player.sparkleUntil) {
+      drawHeadSparkle(sx + pW * 0.5, top + pH * 0.22, pH * 0.35);
+    }
+  } else {
+    // REPLACE: player placeholder — simple Victorian silhouette.
+    ctx.fillStyle = "#7a2530";
+    roundRect(sx, top, pW, pH, pW * 0.15);
+    ctx.fill();
+    ctx.strokeStyle = "#2b1a0d";
+    ctx.lineWidth = 2;
+    roundRect(sx, top, pW, pH, pW * 0.15);
+    ctx.stroke();
   }
 
   if (secretUnlocked) {
-    const cw = headD * 0.9, ch = headD * 0.55;
-    const cy = headCy - headD * 0.55 - ch * 0.7;
+    const cx = sx + pW / 2;
+    const cw = pW * 0.5, ch = pH * 0.16;
+    const cy = top - ch * 0.5;
     ctx.fillStyle = "#c9a24a";
     ctx.beginPath();
-    ctx.moveTo(headCx - cw / 2, cy + ch);
-    ctx.lineTo(headCx - cw / 2, cy + ch * 0.3);
-    ctx.lineTo(headCx - cw / 4, cy + ch * 0.7);
-    ctx.lineTo(headCx, cy);
-    ctx.lineTo(headCx + cw / 4, cy + ch * 0.7);
-    ctx.lineTo(headCx + cw / 2, cy + ch * 0.3);
-    ctx.lineTo(headCx + cw / 2, cy + ch);
+    ctx.moveTo(cx - cw / 2, cy + ch);
+    ctx.lineTo(cx - cw / 2, cy + ch * 0.3);
+    ctx.lineTo(cx - cw / 4, cy + ch * 0.7);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + cw / 4, cy + ch * 0.7);
+    ctx.lineTo(cx + cw / 2, cy + ch * 0.3);
+    ctx.lineTo(cx + cw / 2, cy + ch);
     ctx.closePath();
     ctx.fill();
   }
