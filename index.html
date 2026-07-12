@@ -268,6 +268,8 @@ loadImage('player', 'assets/player.png'); // full-body photo cut-out
 loadImage('doctor', 'assets/doctor.png');
 loadImage('cake', 'assets/cake.png');
 loadImage('gift', 'assets/gift.png');
+loadImage('street', 'assets/street.png');
+loadImage('sun', 'assets/sun.png');
 // REPLACE: no dedicated 26th-birthday photo yet — drop one in and uncomment:
 // loadImage('birthday26', 'assets/birthday26.jpg');
 
@@ -397,10 +399,11 @@ function groundObstacleSize(spriteKey) {
   return { width, height };
 }
 function overhangObstacleSize(spriteKey) {
-  let height = H * OVERHANG_BOTTOM_RATIO;
-  let width = height * aspectOf(spriteKey, 0.6);
-  const maxWidth = H * 0.32;
-  if (width > maxWidth) { width = maxWidth; height = width / aspectOf(spriteKey, 0.6); }
+  // height is ALWAYS the full duck-threshold so the visual sprite exactly
+  // matches the collision zone — never shrink height to cap width, or the
+  // hitbox silently extends below where the sprite is actually drawn.
+  const height = H * OVERHANG_BOTTOM_RATIO;
+  const width = height * aspectOf(spriteKey, 0.6);
   return { width, height };
 }
 
@@ -556,24 +559,30 @@ function drawBackground() {
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, groundY());
 
-  // engraved sun with radiating ink lines
+  // sun
   const sunX = W * 0.82, sunY = H * 0.18, sunR = H * 0.06;
-  ctx.strokeStyle = "rgba(90,60,30,0.4)";
-  ctx.lineWidth = Math.max(1.5, H * 0.003);
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
+  if (imgReady('sun')) {
+    const d = sunR * 3.4;
+    ctx.drawImage(images.sun, sunX - d / 2, sunY - d / 2, d, d);
+  } else {
+    // REPLACE: sun placeholder — simple engraved-look disc with rays
+    ctx.strokeStyle = "rgba(90,60,30,0.4)";
+    ctx.lineWidth = Math.max(1.5, H * 0.003);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(sunX + Math.cos(a) * sunR * 1.15, sunY + Math.sin(a) * sunR * 1.15);
+      ctx.lineTo(sunX + Math.cos(a) * sunR * 1.7, sunY + Math.sin(a) * sunR * 1.7);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#f3e2b0";
     ctx.beginPath();
-    ctx.moveTo(sunX + Math.cos(a) * sunR * 1.15, sunY + Math.sin(a) * sunR * 1.15);
-    ctx.lineTo(sunX + Math.cos(a) * sunR * 1.7, sunY + Math.sin(a) * sunR * 1.7);
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#8a6a3f";
+    ctx.lineWidth = Math.max(2, H * 0.004);
     ctx.stroke();
   }
-  ctx.fillStyle = "#f3e2b0";
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#8a6a3f";
-  ctx.lineWidth = Math.max(2, H * 0.004);
-  ctx.stroke();
 
   // real illustrated mountain ranges, back to front
   drawBgLayer('background_1', H * 0.42, 0.12, groundY() + H * 0.01);
@@ -591,25 +600,31 @@ function drawBackground() {
 
 function drawGroundAndGrid() {
   const gy = groundY();
-  const floor = ctx.createLinearGradient(0, gy, 0, H);
-  floor.addColorStop(0, "#7a5c3a");
-  floor.addColorStop(1, "#43301d");
-  ctx.fillStyle = floor;
-  ctx.fillRect(0, gy, W, H - gy);
-
-  ctx.fillStyle = "#2f2213";
-  ctx.fillRect(0, gy, W, Math.max(2, H * 0.006));
-
-  // simple dashed dirt-road texture scrolling by
-  const spacing = H * 0.05;
-  const offset = cameraX % (spacing * 2);
-  ctx.strokeStyle = "rgba(255,240,210,0.2)";
-  ctx.lineWidth = H * 0.006;
-  for (let x = -offset; x < W + spacing * 2; x += spacing * 2) {
-    ctx.beginPath();
-    ctx.moveTo(x, gy + H * 0.03);
-    ctx.lineTo(x + spacing, gy + H * 0.03);
-    ctx.stroke();
+  if (imgReady('street')) {
+    const img = images.street;
+    const aspect = img.naturalWidth / img.naturalHeight;
+    // the street illustration has tall bollard posts, so the walkable
+    // surface sits well below the image's own top edge (~41% down) —
+    // anchor on that surface line, not the bounding-box top, or the
+    // ground looks like it's floating with a gap above it
+    const surfaceFrac = 0.41;
+    const h = (H - gy) / (1 - surfaceFrac);
+    const w = h * aspect;
+    const drawTop = gy - h * surfaceFrac;
+    const offset = cameraX % w; // full speed — this IS the ground plane
+    const count = Math.ceil(W / w) + 2;
+    for (let i = -1; i <= count; i++) {
+      ctx.drawImage(img, -offset + i * w, drawTop, w, h);
+    }
+  } else {
+    // REPLACE: floor placeholder — flat gradient
+    const floor = ctx.createLinearGradient(0, gy, 0, H);
+    floor.addColorStop(0, "#7a5c3a");
+    floor.addColorStop(1, "#43301d");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, gy, W, H - gy);
+    ctx.fillStyle = "#2f2213";
+    ctx.fillRect(0, gy, W, Math.max(2, H * 0.006));
   }
 }
 
@@ -681,7 +696,7 @@ function resetGame() {
   score = 0;
   elapsed = 0;
   cameraX = 0;
-  scrollSpeed = H * 0.40;
+  scrollSpeed = H * 0.58;
   egg1307Fired = false;
   doctorDancing = false;
   bikePowerupFired = false;
@@ -862,7 +877,7 @@ function update(dt) {
 
   // speed is H-based (not W-based) so obstacle-clear timing stays fair
   // regardless of the device's screen aspect ratio (portrait vs desktop)
-  const baseSpeed = Math.min(H * 0.95, H * 0.40 + elapsed * H * 0.008);
+  const baseSpeed = Math.min(H * 1.15, H * 0.58 + elapsed * H * 0.010);
   scrollSpeed = bikeActive ? baseSpeed * BIKE_SPEED_MULT : baseSpeed;
   cameraX += scrollSpeed * dt;
 
@@ -924,8 +939,9 @@ function update(dt) {
           return;
         }
       } else {
-        const bottom = H * OVERHANG_BOTTOM_RATIO;
-        if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, 0, o.width, bottom)) {
+        // uses o.height (the actual drawn height) rather than a global
+        // constant, so the hitbox always matches what's on screen
+        if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, 0, o.width, o.height)) {
           gameOver();
           return;
         }
