@@ -393,9 +393,11 @@ let spawnCursor = 0;
 const OVERHANG_BOTTOM_RATIO = 0.635; // fraction of H; must duck under this
 const ROCK_HEIGHT = () => H * 0.105; // must be well under max jump apex (~0.184H)
 
+const OBSTACLE_WIDTH_SCALE = 0.72; // narrower obstacles = shorter airborne/duck window = easier
+
 function groundObstacleSize(spriteKey) {
   const height = ROCK_HEIGHT();
-  const width = height * aspectOf(spriteKey, 1);
+  const width = height * aspectOf(spriteKey, 1) * OBSTACLE_WIDTH_SCALE;
   return { width, height };
 }
 function overhangObstacleSize(spriteKey) {
@@ -403,7 +405,7 @@ function overhangObstacleSize(spriteKey) {
   // matches the collision zone — never shrink height to cap width, or the
   // hitbox silently extends below where the sprite is actually drawn.
   const height = H * OVERHANG_BOTTOM_RATIO;
-  const width = height * aspectOf(spriteKey, 0.6);
+  const width = height * aspectOf(spriteKey, 0.6) * OBSTACLE_WIDTH_SCALE;
   return { width, height };
 }
 
