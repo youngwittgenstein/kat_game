@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Happy Birthday Platformer</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #0d1b2a;
+    font-family: 'Baloo 2', system-ui, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  #gameCanvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    background: #7fc9f0;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(10px, 2.5vh, 22px);
+    text-align: center;
+    padding: 6vh 6vw;
+    background: radial-gradient(circle at 50% 20%, #ff9ecb 0%, #ff6fa5 35%, #7b3fe4 100%);
+    color: #fff;
+    transition: opacity 0.25s ease;
+  }
+  .overlay.hidden { display: none; }
+
+  .overlay h1 {
+    font-size: clamp(1.6rem, 6vw, 2.8rem);
+    margin: 0;
+    line-height: 1.25;
+    text-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  }
+  .overlay p {
+    font-size: clamp(1rem, 3.4vw, 1.4rem);
+    margin: 0;
+    font-weight: 500;
+    opacity: 0.95;
+  }
+  .hint {
+    font-size: clamp(0.7rem, 2.2vw, 0.9rem) !important;
+    opacity: 0.7 !important;
+    font-weight: 400 !important;
+  }
+  .hint.unlocked {
+    opacity: 1 !important;
+    color: #ffe066;
+    font-weight: 700 !important;
+  }
+
+  .bigBtn {
+    font-family: 'Baloo 2', sans-serif;
+    font-size: clamp(1.3rem, 5vw, 2rem);
+    font-weight: 800;
+    color: #7b3fe4;
+    background: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 0.7em 1.6em;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.25);
+    cursor: pointer;
+    touch-action: manipulation;
+    transform: translateY(0);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .bigBtn:active {
+    transform: translateY(6px);
+    box-shadow: 0 0 0 rgba(0,0,0,0.25), 0 4px 10px rgba(0,0,0,0.25);
+  }
+
+  #hud {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    left: 0; right: 0;
+    z-index: 15;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  #hud.hidden { display: none; }
+  #hud .pill {
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    font-weight: 700;
+    font-size: clamp(1rem, 4vw, 1.4rem);
+    padding: 0.35em 1em;
+    border-radius: 999px;
+    backdrop-filter: blur(2px);
+  }
+
+  #eggMessage {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  #eggMessage.show { opacity: 1; }
+  #eggMessage span {
+    font-size: clamp(1.8rem, 8vw, 4rem);
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 0 20px #ff2e88, 0 0 40px #ffd447, 0 4px 0 rgba(0,0,0,0.3);
+    text-align: center;
+    padding: 0 10vw;
+    animation: eggPop 0.5s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes eggPop {
+    0% { transform: scale(0.4) rotate(-6deg); opacity: 0; }
+    60% { transform: scale(1.15) rotate(2deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  #flashOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 24;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #flashOverlay.flash {
+    animation: flashAnim 0.7s ease-out;
+  }
+  @keyframes flashAnim {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="hud" class="hidden"><div class="pill">🎂 <span id="scoreDisplay">0</span></div></div>
+
+<div id="flashOverlay"></div>
+<div id="eggMessage"><span id="eggMessageText"></span></div>
+
+<div id="startScreen" class="overlay">
+  <h1>Happy Birthday, <span id="nameSpan"></span>! 🎂</h1>
+  <p>Lauf dem Arzt davon! 🏃&zwj;♀️</p>
+  <button id="startBtn" class="bigBtn">START</button>
+  <p class="hint" id="secretHint">(Tippe ein Geheimwort für eine Überraschung...)</p>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <h1>Dr. Bandscheibe hat dich erwischt... 😅</h1>
+  <p id="finalScore">Punkte: 0</p>
+  <button id="retryBtn" class="bigBtn">Nochmal?</button>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   CONFIG — swap the name here, everything else updates itself
+   ============================================================ */
+const NAME_PLACEHOLDER = "Katalin";
+document.getElementById("nameSpan").textContent = NAME_PLACEHOLDER;
+
+/* ============================================================
+   REPLACE: sprite loading stub.
+   Right now every entity is drawn with colored-rectangle
+   placeholders. To use real art, call loadImage(key, url) and
+   the render functions below will automatically use the image
+   once it has finished loading (falls back to the rectangle
+   placeholder until then / if it's missing).
+   ============================================================ */
+const images = {};
+function loadImage(key, src) {
+  const img = new Image();
+  img.src = src;
+  images[key] = img;
+  return img;
+}
+function imgReady(key) {
+  const img = images[key];
+  return img && img.complete && img.naturalWidth > 0;
+}
+// REPLACE: uncomment + point at real files to swap in real sprites.
+// loadImage('player', 'player.png');
+// loadImage('doctor', 'doctor.png');
+// loadImage('cake', 'cake.png');
+// loadImage('gift', 'gift.png');
+
+/* ============================================================
+   CANVAS / RESPONSIVE SETUP
+   ============================================================ */
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let W = window.innerWidth;
+let H = window.innerHeight;
+
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resizeCanvas);
+window.addEventListener("orientationchange", resizeCanvas);
+resizeCanvas();
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+let state = "start"; // 'start' | 'playing' | 'paused' | 'gameover'
+let secretUnlocked = false;
+let typedBuffer = "";
+let score = 0;
+let elapsed = 0;        // seconds survived, drives difficulty
+let cameraX = 0;
+let scrollSpeed = 0;
+let egg26Fired = false;
+let egg1307Fired = false;
+let doctorDancing = false;
+let doctorDanceEnd = 0;
+
+const PLAYER_SCREEN_X_RATIO = 0.24; // fixed screen position of player
+
+const player = {
+  y: 0, vy: 0,
+  width: 0, height: 0,
+  jumpsUsed: 0,
+  grounded: false,
+};
+
+const doctor = {
+  worldX: 0,
+  y: 0,
+  width: 0, height: 0,
+};
+
+let platforms = [];
+let items = [];
+let particles = [];
+
+/* ============================================================
+   AUDIO — tiny WebAudio jingle, no external files
+   ============================================================ */
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  return audioCtx;
+}
+function playTone(freq, startTime, duration, type = "sine", vol = 0.18) {
+  const ac = getAudioCtx();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+function playJingle() {
+  try {
+    const ac = getAudioCtx();
+    const t0 = ac.currentTime;
+    // little dancing-doctor jingle
+    const notes = [523.25, 587.33, 659.25, 783.99, 659.25, 880.00];
+    notes.forEach((f, i) => playTone(f, t0 + i * 0.16, 0.3, "triangle"));
+  } catch (e) { /* audio not available, ignore */ }
+}
+function playChime() {
+  try {
+    const ac = getAudioCtx();
+    const t0 = ac.currentTime;
+    [660, 880, 1108].forEach((f, i) => playTone(f, t0 + i * 0.09, 0.35, "sine", 0.14));
+  } catch (e) { /* ignore */ }
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+function tryJump() {
+  if (state !== "playing") return;
+  const maxJumps = secretUnlocked ? Infinity : 2;
+  if (player.grounded || player.jumpsUsed < maxJumps) {
+    player.vy = -H * 1.05;
+    player.jumpsUsed += 1;
+    player.grounded = false;
+  }
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (state === "playing") tryJump();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" || e.code === "ArrowUp") {
+    e.preventDefault();
+  }
+  if (state === "start") {
+    if (/^[a-zA-Z]$/.test(e.key)) {
+      typedBuffer = (typedBuffer + e.key.toUpperCase()).slice(-20);
+      if (typedBuffer.includes("GEBURTSTAG") && !secretUnlocked) {
+        secretUnlocked = true;
+        const hint = document.getElementById("secretHint");
+        hint.textContent = "✨ Geheimnis freigeschaltet: unendliche Doppelsprünge! ✨";
+        hint.classList.add("unlocked");
+      }
+    }
+  } else if (state === "playing") {
+    if (e.code === "Space" || e.code === "ArrowUp") {
+      tryJump();
+    }
+  }
+}, { passive: false });
+
+document.getElementById("startBtn").addEventListener("click", startGame);
+document.getElementById("retryBtn").addEventListener("click", startGame);
+
+/* ============================================================
+   TERRAIN / PLATFORM GENERATION (mountain-shaped platforms)
+   ============================================================ */
+function makePlatform(xStart, xEnd, yTop) {
+  return { xStart, xEnd, yTop };
+}
+
+function resetPlatforms() {
+  platforms = [makePlatform(-W * 0.5, W * 1.3, H * 0.72)];
+  items = [];
+  // pre-generate a comfortable runway ahead
+  while (platforms[platforms.length - 1].xEnd < W * 3) {
+    generateNextPlatform();
+  }
+}
+
+function generateNextPlatform() {
+  const last = platforms[platforms.length - 1];
+  const gap = W * (0.03 + Math.random() * 0.10);
+  const width = W * (0.18 + Math.random() * 0.22);
+  let yTop = last.yTop + (Math.random() * 2 - 1) * H * 0.16;
+  yTop = Math.max(H * 0.32, Math.min(H * 0.80, yTop));
+  const xStart = last.xEnd + gap;
+  const xEnd = xStart + width;
+  const platform = makePlatform(xStart, xEnd, yTop);
+  platforms.push(platform);
+
+  // maybe spawn a collectible above this platform
+  if (Math.random() < 0.65) {
+    const kind = Math.random() < 0.55 ? "cake" : "gift";
+    const size = H * 0.045;
+    const ix = xStart + width * (0.25 + Math.random() * 0.5) - size / 2;
+    const hover = Math.random() < 0.5 ? H * 0.02 : H * (0.14 + Math.random() * 0.08);
+    items.push({
+      kind, size,
+      x: ix,
+      y: yTop - size - hover,
+      collected: false,
+    });
+  }
+  return platform;
+}
+
+function findPlatformAt(worldX) {
+  for (let i = 0; i < platforms.length; i++) {
+    const p = platforms[i];
+    if (worldX >= p.xStart && worldX <= p.xEnd) return p;
+  }
+  return null;
+}
+
+/* ============================================================
+   RESET / START
+   ============================================================ */
+function resetGame() {
+  score = 0;
+  elapsed = 0;
+  cameraX = 0;
+  scrollSpeed = W * 0.32;
+  egg26Fired = false;
+  egg1307Fired = false;
+  doctorDancing = false;
+  particles = [];
+
+  player.width = H * 0.06;
+  player.height = H * 0.11;
+  player.y = H * 0.72 - player.height;
+  player.vy = 0;
+  player.jumpsUsed = 0;
+  player.grounded = true;
+
+  doctor.width = H * 0.065;
+  doctor.height = H * 0.12;
+  doctor.worldX = cameraX + W * PLAYER_SCREEN_X_RATIO - W * 0.45;
+  doctor.y = H * 0.72 - doctor.height;
+
+  resetPlatforms();
+  updateScoreDisplay();
+}
+
+function startGame() {
+  resetGame();
+  state = "playing";
+  document.getElementById("startScreen").classList.add("hidden");
+  document.getElementById("gameOverScreen").classList.add("hidden");
+  document.getElementById("hud").classList.remove("hidden");
+  // unlock audio on user gesture (mobile requirement)
+  try { getAudioCtx().resume(); } catch (e) {}
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function gameOver() {
+  state = "gameover";
+  document.getElementById("hud").classList.add("hidden");
+  document.getElementById("eggMessage").classList.remove("show");
+  document.getElementById("finalScore").textContent = "Punkte: " + score;
+  document.getElementById("gameOverScreen").classList.remove("hidden");
+}
+
+function updateScoreDisplay() {
+  document.getElementById("scoreDisplay").textContent = score;
+}
+
+/* ============================================================
+   EASTER EGGS
+   ============================================================ */
+function showEggMessage(text, ms) {
+  const el = document.getElementById("eggMessage");
+  document.getElementById("eggMessageText").textContent = text;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), ms);
+}
+
+function triggerEgg26() {
+  egg26Fired = true;
+  state = "paused";
+  document.getElementById("flashOverlay").classList.remove("flash");
+  // force reflow so the animation can restart
+  void document.getElementById("flashOverlay").offsetWidth;
+  document.getElementById("flashOverlay").classList.add("flash");
+  spawnConfetti(160);
+  showEggMessage("SIE IST 26!! 🎂🎉", 2600);
+  playChime();
+  setTimeout(() => {
+    if (state === "paused") state = "playing";
+  }, 3000);
+}
+
+function triggerEgg1307() {
+  egg1307Fired = true;
+  doctorDancing = true;
+  doctorDanceEnd = elapsed + 10;
+  playJingle();
+  showEggMessage("DR. BANDSCHEIBE TANZT! 💃🕺", 2200);
+}
+
+function spawnConfetti(n) {
+  const colors = ["#ff6fa5", "#ffd447", "#7b3fe4", "#4dd6ff", "#ff9ecb", "#7CFC00"];
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x: W * (0.2 + Math.random() * 0.6),
+      y: -Math.random() * H * 0.3,
+      vx: (Math.random() - 0.5) * W * 0.4,
+      vy: H * (0.15 + Math.random() * 0.35),
+      size: H * (0.012 + Math.random() * 0.014),
+      color: colors[(Math.random() * colors.length) | 0],
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 8,
+      life: 3 + Math.random(),
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.vy += H * 0.9 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.rot += p.vr * dt;
+    p.life -= dt;
+    if (p.life <= 0 || p.y > H + 40) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   MAIN UPDATE
+   ============================================================ */
+function aabbOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function update(dt) {
+  elapsed += dt;
+
+  // difficulty ramp
+  scrollSpeed = Math.min(W * 0.75, W * 0.32 + elapsed * W * 0.006);
+  cameraX += scrollSpeed * dt;
+
+  // extend terrain ahead of camera
+  while (platforms[platforms.length - 1].xEnd < cameraX + W * 2) {
+    generateNextPlatform();
+  }
+  // drop old platforms/items behind camera
+  while (platforms.length > 2 && platforms[0].xEnd < cameraX - W) platforms.shift();
+  items = items.filter(it => !it.collected && it.x + it.size > cameraX - W * 0.5);
+
+  const playerScreenX = W * PLAYER_SCREEN_X_RATIO;
+  const playerWorldX = cameraX + playerScreenX;
+
+  // --- player physics ---
+  const prevBottom = player.y + player.height;
+  const GRAVITY = H * 3.4;
+  player.vy += GRAVITY * dt;
+  player.y += player.vy * dt;
+  const newBottom = player.y + player.height;
+
+  const standingPlatform = findPlatformAt(playerWorldX);
+  if (standingPlatform && player.vy >= 0 &&
+      prevBottom <= standingPlatform.yTop + 0.5 && newBottom >= standingPlatform.yTop) {
+    player.y = standingPlatform.yTop - player.height;
+    player.vy = 0;
+    player.grounded = true;
+    player.jumpsUsed = 0;
+  } else {
+    player.grounded = false;
+  }
+
+  if (player.y > H + player.height * 3) {
+    gameOver();
+    return;
+  }
+
+  // --- item collection ---
+  for (const it of items) {
+    if (it.collected) continue;
+    const itScreenX = it.x - cameraX;
+    if (aabbOverlap(playerScreenX, player.y, player.width, player.height,
+                     itScreenX, it.y, it.size, it.size)) {
+      it.collected = true;
+      score += 1;
+      updateScoreDisplay();
+      if (score === 26 && !egg26Fired) { triggerEgg26(); }
+      if (score === 1307 && !egg1307Fired) { triggerEgg1307(); }
+    }
+  }
+
+  // --- doctor AI ---
+  if (doctorDancing) {
+    if (elapsed >= doctorDanceEnd) doctorDancing = false;
+  } else {
+    const wobble = Math.sin(elapsed * 0.6) * 0.12;
+    const speedMul = 0.82 + Math.min(0.3, elapsed * 0.0015) + wobble;
+    doctor.worldX += scrollSpeed * speedMul * dt;
+  }
+  // keep doctor from drifting too far off-screen (always a visible threat)
+  const maxTrailScreen = W * 0.62;
+  const minDoctorWorldX = cameraX + playerScreenX - maxTrailScreen;
+  if (doctor.worldX < minDoctorWorldX) doctor.worldX = minDoctorWorldX;
+
+  const docPlatform = findPlatformAt(doctor.worldX);
+  const targetDocY = docPlatform ? docPlatform.yTop - doctor.height : H * 0.9 - doctor.height;
+  doctor.y += (targetDocY - doctor.y) * Math.min(1, dt * 10);
+
+  // --- collision: doctor catches player ---
+  const doctorScreenX = doctor.worldX - cameraX;
+  if (aabbOverlap(playerScreenX, player.y, player.width, player.height,
+                   doctorScreenX, doctor.y, doctor.width, doctor.height)) {
+    gameOver();
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function drawBackground() {
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#8fd8ff");
+  sky.addColorStop(1, "#eaf6ff");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // sun
+  ctx.fillStyle = "#fff6b0";
+  ctx.beginPath();
+  ctx.arc(W * 0.82, H * 0.18, H * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawParallaxMountains(cameraX * 0.15, H * 0.55, H * 0.32, "#b8a4e3");
+  drawParallaxMountains(cameraX * 0.35, H * 0.68, H * 0.22, "#9a86d1");
+}
+
+function drawParallaxMountains(offset, baseline, amp, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  const step = W / 6;
+  for (let x = -step; x <= W + step; x += step) {
+    const wx = x + offset;
+    const y = baseline - Math.abs(Math.sin(wx * 0.004)) * amp;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPlatforms() {
+  for (const p of platforms) {
+    const xStart = p.xStart - cameraX;
+    const xEnd = p.xEnd - cameraX;
+    if (xEnd < -20 || xStart > W + 20) continue;
+    const inset = Math.min((xEnd - xStart) * 0.18, H * 0.06);
+
+    const grad = ctx.createLinearGradient(0, p.yTop, 0, H);
+    grad.addColorStop(0, "#8a6b4f");
+    grad.addColorStop(1, "#5c4433");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(xStart, H);
+    ctx.lineTo(xStart + inset, p.yTop);
+    ctx.lineTo(xEnd - inset, p.yTop);
+    ctx.lineTo(xEnd, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // grassy/snow cap on top edge
+    ctx.fillStyle = "#eafff0";
+    ctx.fillRect(xStart + inset, p.yTop, (xEnd - inset) - (xStart + inset), H * 0.012);
+  }
+}
+
+function drawItems() {
+  for (const it of items) {
+    if (it.collected) continue;
+    const sx = it.x - cameraX;
+    if (sx < -it.size || sx > W + it.size) continue;
+    if (it.kind === "cake") {
+      if (imgReady("cake")) {
+        ctx.drawImage(images.cake, sx, it.y, it.size, it.size);
+      } else {
+        // REPLACE: cake sprite — yellow square placeholder
+        ctx.fillStyle = "#ffd447";
+        ctx.fillRect(sx, it.y, it.size, it.size);
+        ctx.font = (it.size * 0.9) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🎂", sx + it.size / 2, it.y + it.size / 2 + 1);
+      }
+    } else {
+      if (imgReady("gift")) {
+        ctx.drawImage(images.gift, sx, it.y, it.size, it.size);
+      } else {
+        // REPLACE: gift sprite — purple square placeholder
+        ctx.fillStyle = "#a663ff";
+        ctx.fillRect(sx, it.y, it.size, it.size);
+        ctx.font = (it.size * 0.9) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🎁", sx + it.size / 2, it.y + it.size / 2 + 1);
+      }
+    }
+  }
+}
+
+function drawPlayer() {
+  const sx = W * PLAYER_SCREEN_X_RATIO;
+  if (imgReady("player")) {
+    ctx.drawImage(images.player, sx, player.y, player.width, player.height);
+  } else {
+    // REPLACE: player sprite — pink rectangle placeholder labeled PLAYER
+    ctx.fillStyle = "#ff6fa5";
+    ctx.fillRect(sx, player.y, player.width, player.height);
+    ctx.strokeStyle = "#c2437c";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, player.y, player.width, player.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold " + (player.width * 0.22) + "px 'Baloo 2', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.save();
+    ctx.translate(sx + player.width / 2, player.y + player.height / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("PLAYER", 0, 0);
+    ctx.restore();
+  }
+
+  if (secretUnlocked) {
+    // small crown above player for the GEBURTSTAG secret
+    const cw = player.width * 0.8;
+    const ch = player.width * 0.5;
+    const cx = sx + player.width / 2;
+    const cy = player.y - ch * 0.7;
+    ctx.fillStyle = "#ffd447";
+    ctx.beginPath();
+    ctx.moveTo(cx - cw / 2, cy + ch);
+    ctx.lineTo(cx - cw / 2, cy + ch * 0.3);
+    ctx.lineTo(cx - cw / 4, cy + ch * 0.7);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + cw / 4, cy + ch * 0.7);
+    ctx.lineTo(cx + cw / 2, cy + ch * 0.3);
+    ctx.lineTo(cx + cw / 2, cy + ch);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawDoctor() {
+  const sx = doctor.worldX - cameraX;
+  if (sx < -doctor.width * 2 || sx > W + doctor.width * 2) return;
+
+  let dy = doctor.y;
+  let rot = 0;
+  if (doctorDancing) {
+    dy += Math.sin(elapsed * 10) * H * 0.02;
+    rot = Math.sin(elapsed * 8) * 0.18;
+  }
+
+  ctx.save();
+  ctx.translate(sx + doctor.width / 2, dy + doctor.height / 2);
+  ctx.rotate(rot);
+
+  if (imgReady("doctor")) {
+    ctx.drawImage(images.doctor, -doctor.width / 2, -doctor.height / 2, doctor.width, doctor.height);
+  } else {
+    // REPLACE: doctor sprite — white rectangle w/ red cross, labeled DR. BANDSCHEIBE
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-doctor.width / 2, -doctor.height / 2, doctor.width, doctor.height);
+    ctx.strokeStyle = "#c9c9c9";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-doctor.width / 2, -doctor.height / 2, doctor.width, doctor.height);
+
+    // red cross
+    const cw = doctor.width * 0.28;
+    const cl = doctor.height * 0.4;
+    ctx.fillStyle = "#e63946";
+    ctx.fillRect(-cw / 2, -cl / 2, cw, cl);
+    ctx.fillRect(-cl / 2, -cw / 2, cl, cw);
+
+    ctx.fillStyle = "#333";
+    ctx.font = "bold " + (doctor.width * 0.15) + "px 'Baloo 2', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.save();
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("DR. BANDSCHEIBE", 0, -doctor.height * 0.35);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  if (doctorDancing) {
+    ctx.font = (doctor.width * 0.4) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🎵", sx + doctor.width / 2 + Math.sin(elapsed * 6) * 10, dy - H * 0.02);
+  }
+}
+
+function render() {
+  drawBackground();
+  drawPlatforms();
+  drawItems();
+  drawDoctor();
+  drawPlayer();
+  drawParticles();
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+let lastTime = 0;
+function loop(ts) {
+  const dt = Math.min(0.05, (ts - lastTime) / 1000 || 0);
+  lastTime = ts;
+
+  if (state === "playing") {
+    update(dt);
+  }
+  updateParticles(dt);
+
+  if (state === "playing" || state === "paused") {
+    render();
+    requestAnimationFrame(loop);
+  } else if (state === "gameover") {
+    render();
+  }
+}
+</script>
+</body>
+</html>
