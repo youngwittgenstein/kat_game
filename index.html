@@ -213,7 +213,7 @@
 
 <div id="splashScreen" class="overlay">
   <video id="splashVideo" src="assets/silly_walk.mp4" playsinline></video>
-  <p class="controlsHint">Tippen zum Überspringen</p>
+  <p class="controlsHint" id="splashHint">Tippen zum Start (mit Ton)</p>
 </div>
 
 <div id="startScreen" class="overlay hidden">
@@ -290,6 +290,8 @@ for (const k of PEEK_HEAD_KEYS) loadImage(k, 'assets/' + k + '.png');
 (function setupSplash() {
   const splash = document.getElementById('splashScreen');
   const video = document.getElementById('splashVideo');
+  const hint = document.getElementById('splashHint');
+  let started = false;
   let dismissed = false;
   function dismiss() {
     if (dismissed) return;
@@ -298,20 +300,23 @@ for (const k of PEEK_HEAD_KEYS) loadImage(k, 'assets/' + k + '.png');
     document.getElementById('startScreen').classList.remove('hidden');
     try { video.pause(); } catch (e) {}
   }
-  // try with sound first — browsers only allow silent autoplay without a
-  // prior user gesture, so fall back to muted only if that's rejected
-  video.muted = false;
-  const playAttempt = video.play();
-  if (playAttempt && playAttempt.catch) {
-    playAttempt.catch(() => {
-      video.muted = true;
+  // browsers only allow audible playback after a real user gesture, so we
+  // deliberately don't autoplay here — the first tap both starts the video
+  // AND counts as that gesture, so sound plays reliably instead of the
+  // silent-autoplay fallback.
+  splash.addEventListener('pointerdown', () => {
+    if (!started) {
+      started = true;
+      hint.textContent = 'Tippen zum Überspringen';
+      video.muted = false;
       video.play().catch(() => {});
-    });
-  }
+    } else {
+      dismiss();
+    }
+  });
   video.addEventListener('ended', dismiss);
   video.addEventListener('error', dismiss);
-  splash.addEventListener('pointerdown', dismiss);
-  setTimeout(dismiss, 12000); // safety net if autoplay is blocked
+  setTimeout(dismiss, 25000); // safety net in case nobody ever taps
 })();
 
 /* ============================================================
@@ -764,7 +769,7 @@ function gameOver() {
   document.getElementById("finalScore").textContent = "Punkte: " + score;
   const panel = document.getElementById("egg26Panel");
   const box = document.getElementById("egg26PhotoBox");
-  if (score === 26) {
+  if (score >= 26) {
     panel.classList.add("show");
     box.innerHTML = '<video src="assets/Monty_Happy_Birthday.mp4" loop playsinline ' +
       'style="cursor:pointer;" onclick="this.muted = !this.muted;"></video>';
