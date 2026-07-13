@@ -1296,54 +1296,79 @@ function update(dt) {
 /* ============================================================
    RENDER — player, doctor, obstacles, items
    ============================================================ */
-function drawObstacles() {
+// fraction of a headgate's icon width that counts as "inside the mouth" —
+// while the player's (fixed) screen x falls in this zone she's drawn
+// BEHIND the head sprite instead of in front of it, so running through
+// reads as a tunnel: in through the open mouth, hidden, out the back
+const HEADGATE_TUNNEL_FRAC = 0.5;
+
+// which headgate (if any) the player is currently "inside" — drawn after
+// her instead of before, so it occludes her for that stretch
+function findActiveTunnelObstacle() {
+  const playerCenterX = W * PLAYER_SCREEN_X_RATIO + playerWidth() / 2;
   for (const o of obstacles) {
+    if (o.type !== "headgate") continue;
     const sx = o.x - cameraX;
-    const cx = sx + o.width / 2; // shared center of the (narrow) hitbox and the (full-size) icon
-    if (cx + o.drawWidth / 2 < -20 || cx - o.drawWidth / 2 > W + 20) continue;
-    if (o.type === "rock") {
-      const h = ROCK_HEIGHT();
-      const top = groundY() - h;
-      const drawX = cx - o.drawWidth / 2;
-      if (imgReady(o.spriteKey)) {
-        ctx.drawImage(images[o.spriteKey], drawX, top, o.drawWidth, h);
-      } else {
-        ctx.fillStyle = "#8a6a42";
-        ctx.fillRect(drawX, top, o.drawWidth, h);
-      }
-    } else if (o.type === "headgate") {
-      // the mouth pops open automatically once she gets close — purely
-      // a visual reveal, the passable danger zone never changes
-      if (o.variant === "head1" && !o.opened) {
-        const worldDist = o.x - (cameraX + W * PLAYER_SCREEN_X_RATIO);
-        if (worldDist < H * 0.9) { o.opened = true; o.spriteKey = "head1_offen"; }
-      }
-      const drawX = cx - o.drawWidth / 2;
-      // anchor on the mouth's own center (measured per sprite), not the
-      // image's bounding-box top, so the passage lines up with where she
-      // actually runs rather than floating high above her
-      const mouthFrac = MOUTH_CENTER_FRAC[o.spriteKey] || 0.65;
-      const mouthTargetY = HEADGATE_DANGER_BOTTOM() + H * 0.10;
-      const drawY = mouthTargetY - mouthFrac * o.height;
-      if (imgReady(o.spriteKey)) {
-        ctx.drawImage(images[o.spriteKey], drawX, drawY, o.drawWidth, o.height);
-      } else {
-        ctx.fillStyle = "#5c4a38";
-        ctx.fillRect(drawX, drawY, o.drawWidth, o.height);
-      }
+    const cx = sx + o.width / 2;
+    const half = (o.drawWidth * HEADGATE_TUNNEL_FRAC) / 2;
+    if (playerCenterX > cx - half && playerCenterX < cx + half) return o;
+  }
+  return null;
+}
+
+function drawOneObstacle(o) {
+  const sx = o.x - cameraX;
+  const cx = sx + o.width / 2; // shared center of the (narrow) hitbox and the (full-size) icon
+  if (cx + o.drawWidth / 2 < -20 || cx - o.drawWidth / 2 > W + 20) return;
+  if (o.type === "rock") {
+    const h = ROCK_HEIGHT();
+    const top = groundY() - h;
+    const drawX = cx - o.drawWidth / 2;
+    if (imgReady(o.spriteKey)) {
+      ctx.drawImage(images[o.spriteKey], drawX, top, o.drawWidth, h);
     } else {
-      const sway = Math.sin(elapsed * 2 + o.wobble) * 0.09;
-      ctx.save();
-      ctx.translate(cx, 0);
-      ctx.rotate(sway);
-      if (imgReady(o.spriteKey)) {
-        ctx.drawImage(images[o.spriteKey], -o.drawWidth / 2, 0, o.drawWidth, o.height);
-      } else {
-        ctx.fillStyle = "#6b4e2f";
-        ctx.fillRect(-o.drawWidth / 2, 0, o.drawWidth, o.height);
-      }
-      ctx.restore();
+      ctx.fillStyle = "#8a6a42";
+      ctx.fillRect(drawX, top, o.drawWidth, h);
     }
+  } else if (o.type === "headgate") {
+    // the mouth pops open automatically once she gets close — purely
+    // a visual reveal, the passable danger zone never changes
+    if (o.variant === "head1" && !o.opened) {
+      const worldDist = o.x - (cameraX + W * PLAYER_SCREEN_X_RATIO);
+      if (worldDist < H * 0.9) { o.opened = true; o.spriteKey = "head1_offen"; }
+    }
+    const drawX = cx - o.drawWidth / 2;
+    // anchor on the mouth's own center (measured per sprite), not the
+    // image's bounding-box top, so the passage lines up with where she
+    // actually runs rather than floating high above her
+    const mouthFrac = MOUTH_CENTER_FRAC[o.spriteKey] || 0.65;
+    const mouthTargetY = HEADGATE_DANGER_BOTTOM() + H * 0.10;
+    const drawY = mouthTargetY - mouthFrac * o.height;
+    if (imgReady(o.spriteKey)) {
+      ctx.drawImage(images[o.spriteKey], drawX, drawY, o.drawWidth, o.height);
+    } else {
+      ctx.fillStyle = "#5c4a38";
+      ctx.fillRect(drawX, drawY, o.drawWidth, o.height);
+    }
+  } else {
+    const sway = Math.sin(elapsed * 2 + o.wobble) * 0.09;
+    ctx.save();
+    ctx.translate(cx, 0);
+    ctx.rotate(sway);
+    if (imgReady(o.spriteKey)) {
+      ctx.drawImage(images[o.spriteKey], -o.drawWidth / 2, 0, o.drawWidth, o.height);
+    } else {
+      ctx.fillStyle = "#6b4e2f";
+      ctx.fillRect(-o.drawWidth / 2, 0, o.drawWidth, o.height);
+    }
+    ctx.restore();
+  }
+}
+
+function drawObstacles(skip) {
+  for (const o of obstacles) {
+    if (o === skip) continue;
+    drawOneObstacle(o);
   }
 }
 
@@ -1577,10 +1602,12 @@ function drawDoctor() {
 function render() {
   drawBackground();
   drawGroundAndGrid();
-  drawObstacles();
+  const tunnelObstacle = findActiveTunnelObstacle();
+  drawObstacles(tunnelObstacle);
   drawItems();
   drawDoctor();
   drawPlayer();
+  if (tunnelObstacle) drawOneObstacle(tunnelObstacle); // occludes her while "inside" the mouth
   drawParticles();
   drawVignette();
 }
