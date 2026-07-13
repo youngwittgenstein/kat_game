@@ -346,7 +346,7 @@ function groundY() { return H * 0.78; }
 /* ============================================================
    GAME STATE
    ============================================================ */
-let state = "start"; // 'start' | 'intro' | 'playing' | 'gameover'
+let state = "start"; // 'start' | 'intro' | 'playing' | 'caught' | 'gameover'
 let secretUnlocked = false;
 let typedBuffer = "";
 let score = 0;
@@ -364,6 +364,13 @@ let bikeEndTime = 0;
 const BIKE_TRIGGER_SCORE = 11; // "ab ca. 10-12 Punkten"
 const BIKE_DURATION = 7;       // seconds of clear straight-track riding
 const BIKE_SPEED_MULT = 1.4;
+
+// "caught" — a brief freeze-frame where the doctor rushes in and grabs her
+// before the Game Over screen appears, instead of cutting to it instantly
+let caughtTimer = 0;
+let catchDoctorStartX = 0;
+let catchWorldX = 0;
+const CAUGHT_DURATION = 1.1;
 
 const PLAYER_SCREEN_X_RATIO = 0.24;
 
@@ -762,7 +769,28 @@ function startPlaying() {
   document.getElementById("hud").classList.remove("hidden");
 }
 
-function gameOver() {
+function triggerCatch() {
+  if (state !== "playing") return;
+  state = "caught";
+  caughtTimer = 0;
+  catchDoctorStartX = doctor.worldX;
+  catchWorldX = cameraX + W * PLAYER_SCREEN_X_RATIO; // where she was standing when caught
+  doctorDancing = false;
+}
+
+function updateCaught(dt) {
+  caughtTimer += dt;
+  const t = Math.min(1, caughtTimer / CAUGHT_DURATION);
+  const eased = 1 - Math.pow(1 - t, 3); // ease-out — fast lunge, settles at the end
+  doctor.worldX = catchDoctorStartX + (catchWorldX - catchDoctorStartX) * eased;
+  doctor.bouncePhase += dt * 10;
+  if (t === 1 && caughtTimer - dt < CAUGHT_DURATION) {
+    spawnSparkle(W * PLAYER_SCREEN_X_RATIO + playerWidth() / 2, groundY() - playerHeight(), 16);
+  }
+  if (caughtTimer >= CAUGHT_DURATION) finalizeGameOver();
+}
+
+function finalizeGameOver() {
   state = "gameover";
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("eggMessage").classList.remove("show");
@@ -968,14 +996,14 @@ function update(dt) {
       if (o.type === "rock") {
         const rockH = ROCK_HEIGHT();
         if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, groundY() - rockH, o.width, rockH)) {
-          gameOver();
+          triggerCatch();
           return;
         }
       } else {
         // uses o.height (the actual drawn height) rather than a global
         // constant, so the hitbox always matches what's on screen
         if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, 0, o.width, o.height)) {
-          gameOver();
+          triggerCatch();
           return;
         }
       }
@@ -1000,7 +1028,7 @@ function update(dt) {
     const { width: doctorW, height: doctorH } = doctorSize();
     const doctorTop = groundY() - doctorH;
     if (aabbOverlap(playerScreenX, pTop, pW, pH, doctorScreenX, doctorTop, doctorW, doctorH)) {
-      gameOver();
+      triggerCatch();
     }
   }
 }
@@ -1287,9 +1315,10 @@ function loop(ts) {
 
   if (state === "intro") updateIntro(dt);
   else if (state === "playing") update(dt);
+  else if (state === "caught") updateCaught(dt);
   updateParticles(dt);
 
-  if (state === "intro" || state === "playing") {
+  if (state === "intro" || state === "playing" || state === "caught") {
     render();
     requestAnimationFrame(loop);
   } else if (state === "gameover") {
