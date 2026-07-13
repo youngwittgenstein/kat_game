@@ -207,6 +207,61 @@
     overflow: hidden;
   }
   #egg26PhotoBox img, #egg26PhotoBox video { width: 100%; height: 100%; object-fit: cover; }
+
+  .triviaInput {
+    font-family: 'Special Elite', monospace;
+    font-size: clamp(1.3rem, 5vw, 1.8rem);
+    text-align: center;
+    width: 5em;
+    padding: 0.3em 0.2em;
+    border: 2px solid #2b1a0d;
+    border-radius: 4px;
+    background: #f2e2bd;
+    color: #2b1a0d;
+  }
+  #triviaResultScreen img {
+    width: min(50vw, 230px);
+    height: auto;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35));
+  }
+
+  #minigameControls {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 16;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: clamp(14px, 5vw, 26px);
+    pointer-events: none;
+  }
+  #minigameControls.hidden { display: none; }
+  .mgBtn {
+    pointer-events: auto;
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    color: #f2e2bd;
+    background: rgba(92,58,32,0.88);
+    border: 2px solid #2b1a0d;
+    border-radius: 50%;
+    width: clamp(52px, 15vw, 68px);
+    height: clamp(52px, 15vw, 68px);
+    font-size: clamp(1.3rem, 5vw, 1.7rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #2b1a0d;
+    transform: translateY(0);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .mgBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #2b1a0d; }
+  .mgBtn.mgShoot {
+    background: rgba(122,37,48,0.92);
+    font-size: clamp(1.5rem, 6vw, 2rem);
+  }
 </style>
 </head>
 <body>
@@ -241,6 +296,28 @@
     <p style="margin:0;font-weight:800;color:#7a2530;">Alles Gute zum 26., Katalin!</p>
   </div>
   <button id="retryBtn" class="bigBtn">Nochmal?</button>
+</div>
+
+<div id="triviaScreen" class="overlay hidden">
+  <h1>Eine Frage, bevor es weitergeht...</h1>
+  <p>What is the ultimate answer to everything?</p>
+  <form id="triviaForm">
+    <input id="triviaAnswer" class="triviaInput" type="text" inputmode="numeric" autocomplete="off" maxlength="6">
+    <br>
+    <button type="submit" class="bigBtn" style="margin-top:14px;">Antworten</button>
+  </form>
+</div>
+
+<div id="triviaResultScreen" class="overlay hidden">
+  <img src="assets/computer_42.png" alt="Deep Thought">
+  <p style="font-weight:800;">Deep Thought thinks you are correct: New game unlocked</p>
+  <button id="triviaContinueBtn" class="bigBtn">Los geht's!</button>
+</div>
+
+<div id="minigameControls" class="hidden">
+  <button id="mgLeftBtn" class="mgBtn" aria-label="Links">&#9664;</button>
+  <button id="mgShootBtn" class="mgBtn mgShoot" aria-label="Schie&szlig;en">&#127856;</button>
+  <button id="mgRightBtn" class="mgBtn" aria-label="Rechts">&#9654;</button>
 </div>
 
 <script>
@@ -299,6 +376,7 @@ loadImage('head1_zu', 'assets/Head_1_zu.png');
 loadImage('head1_offen', 'assets/Head_1_offen.png');
 loadImage('head2', 'assets/Head_2.png');
 loadImage('bike', 'assets/bike.png');
+loadImage('spritze', 'assets/spritze.png'); // minigame projectile
 // REPLACE: no dedicated 26th-birthday photo yet — drop one in and uncomment:
 // loadImage('birthday26', 'assets/birthday26.jpg');
 
@@ -374,7 +452,7 @@ function groundY() { return H * 0.78; }
 /* ============================================================
    GAME STATE
    ============================================================ */
-let state = "start"; // 'start' | 'intro' | 'playing' | 'caught' | 'gameover'
+let state = "start"; // 'start' | 'intro' | 'playing' | 'caught' | 'gameover' | 'trivia' | 'minigame'
 let secretUnlocked = false;
 let typedBuffer = "";
 let score = 0;
@@ -392,6 +470,11 @@ let bikeEndTime = 0;
 const BIKE_TRIGGER_SCORE = 11; // "ab ca. 10-12 Punkten"
 const BIKE_DURATION = 7;       // seconds of clear straight-track riding
 const BIKE_SPEED_MULT = 1.4;
+
+// "42" trivia gate — at this score the runner pauses for a Hitchhiker's
+// Guide easter egg; answering correctly unlocks the shooting-gallery minigame
+const MINIGAME_TRIGGER_SCORE = 42;
+let minigameGateShown = false; // only asked once per run
 
 // "caught" — a brief freeze-frame where the doctor rushes in and grabs her
 // before the Game Over screen appears, instead of cutting to it instantly
@@ -563,7 +646,8 @@ canvas.addEventListener("pointercancel", () => endDuck());
 canvas.addEventListener("pointerleave", () => endDuck());
 
 window.addEventListener("keydown", (e) => {
-  if (["Space", "ArrowUp", "ArrowDown", "KeyS"].includes(e.code)) e.preventDefault();
+  if (state === "trivia") return; // let the answer field type normally
+  if (["Space", "ArrowUp", "ArrowDown", "KeyS", "ArrowLeft", "ArrowRight", "KeyA", "KeyD"].includes(e.code)) e.preventDefault();
   if (state === "start") {
     if (/^[a-zA-Z]$/.test(e.key)) {
       typedBuffer = (typedBuffer + e.key.toUpperCase()).slice(-20);
@@ -572,12 +656,28 @@ window.addEventListener("keydown", (e) => {
   } else if (state === "playing") {
     if (e.code === "Space" || e.code === "ArrowUp") tryJump();
     if (e.code === "ArrowDown" || e.code === "KeyS") startDuck();
+  } else if (state === "minigame") {
+    if (e.code === "ArrowLeft" || e.code === "KeyA") mg && (mg.moveLeft = true);
+    if (e.code === "ArrowRight" || e.code === "KeyD") mg && (mg.moveRight = true);
+    if (e.code === "Space") minigameShoot();
   }
 }, { passive: false });
 
 window.addEventListener("keyup", (e) => {
   if (e.code === "ArrowDown" || e.code === "KeyS") endDuck();
+  if ((e.code === "ArrowLeft" || e.code === "KeyA") && mg) mg.moveLeft = false;
+  if ((e.code === "ArrowRight" || e.code === "KeyD") && mg) mg.moveRight = false;
 });
+
+function bindHold(btn, onDown, onUp) {
+  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); onDown(); });
+  btn.addEventListener("pointerup", (e) => { e.preventDefault(); onUp(); });
+  btn.addEventListener("pointercancel", onUp);
+  btn.addEventListener("pointerleave", onUp);
+}
+bindHold(document.getElementById("mgLeftBtn"), () => { if (mg) mg.moveLeft = true; }, () => { if (mg) mg.moveLeft = false; });
+bindHold(document.getElementById("mgRightBtn"), () => { if (mg) mg.moveRight = true; }, () => { if (mg) mg.moveRight = false; });
+document.getElementById("mgShootBtn").addEventListener("pointerdown", (e) => { e.preventDefault(); minigameShoot(); });
 
 document.getElementById("startBtn").addEventListener("click", beginIntro);
 document.getElementById("retryBtn").addEventListener("click", beginIntro);
@@ -624,11 +724,18 @@ function drawPeek() {
 }
 
 /* ============================================================
-   DAY / NIGHT CYCLE — toggles every 26 points, eased crossfade
+   DAY / NIGHT CYCLE — night first falls at 26 points, then flips
+   every 10 points thereafter (26 night, 36 day, 46 night, ...)
    ============================================================ */
 let nightAmount = 0; // 0 = full day, 1 = full night
+const NIGHT_START_SCORE = 26;
+const NIGHT_FLIP_INTERVAL = 10;
 function updateDayNight(dt) {
-  const target = Math.floor(score / 26) % 2; // 0,1,0,1... every 26 points
+  let target = 0;
+  if (score >= NIGHT_START_SCORE) {
+    const steps = Math.floor((score - NIGHT_START_SCORE) / NIGHT_FLIP_INTERVAL);
+    target = (steps + 1) % 2; // starts at night (1), then alternates
+  }
   const rate = 0.6; // fraction per second — ~1.7s to fully cross-fade
   if (nightAmount < target) nightAmount = Math.min(target, nightAmount + rate * dt);
   else if (nightAmount > target) nightAmount = Math.max(target, nightAmount - rate * dt);
@@ -859,6 +966,7 @@ function resetGame() {
   nightAmount = 0;
   head1Fired = false;
   nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD2_INTERVAL;
+  minigameGateShown = false;
   particles = [];
 
   player.hoverY = 0;
@@ -1124,6 +1232,11 @@ function update(dt) {
       if (score === BIKE_TRIGGER_SCORE && !bikePowerupFired) triggerBikePowerup();
       if (score === HEAD1_TRIGGER_SCORE && !head1Fired) { head1Fired = true; spawnHeadGate("head1"); }
       if (score >= nextHead2Score) { spawnHeadGate("head2"); nextHead2Score += HEAD2_INTERVAL; }
+      if (score === MINIGAME_TRIGGER_SCORE && !minigameGateShown) {
+        minigameGateShown = true;
+        triggerTriviaGate();
+        return;
+      }
     }
   }
 
@@ -1473,6 +1586,284 @@ function render() {
 }
 
 /* ============================================================
+   "42" TRIVIA GATE — pauses the runner once at score 42, then
+   either unlocks the minigame or just resumes the run
+   ============================================================ */
+function triggerTriviaGate() {
+  state = "trivia";
+  document.getElementById("hud").classList.add("hidden");
+  document.getElementById("triviaAnswer").value = "";
+  document.getElementById("triviaScreen").classList.remove("hidden");
+  setTimeout(() => document.getElementById("triviaAnswer").focus(), 50);
+}
+
+function resumeAfterTrivia() {
+  document.getElementById("triviaScreen").classList.add("hidden");
+  state = "playing";
+  document.getElementById("hud").classList.remove("hidden");
+  showEggMessage("Falsche Antwort... weiter geht's!", 1600);
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById("triviaForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const answer = document.getElementById("triviaAnswer").value.trim();
+  document.getElementById("triviaScreen").classList.add("hidden");
+  if (answer === "42") {
+    document.getElementById("triviaResultScreen").classList.remove("hidden");
+  } else {
+    resumeAfterTrivia();
+  }
+});
+
+document.getElementById("triviaContinueBtn").addEventListener("click", () => {
+  document.getElementById("triviaResultScreen").classList.add("hidden");
+  startMinigame();
+});
+
+/* ============================================================
+   MINIGAME — Deep Thought's shooting gallery. Reuses the same
+   sprites as the runner: player + cake fired upward at doctors
+   who peek out from behind mountain/books cover and lob syringes
+   back down. 3 lives, 6 hits to win, then the runner resumes.
+   ============================================================ */
+const MINIGAME_LIVES = 3;
+const MINIGAME_HITS_NEEDED = 6;
+// 'background_1' is the illustrated mountain range (already loaded for the
+// runner's parallax backdrop) — reused here as the "Berge" cover, cropped
+// to a narrow cover-fit slice per slot so 4 slots don't tile one wide
+// panorama into a solid wall. ground_books is the "Bücher" cover.
+const MINIGAME_SLOT_KEYS = ['background_1', 'ground_books', 'background_1', 'ground_books'];
+const MINIGAME_SLOT_HALIGN = [0.15, 0.5, 0.85, 0.5]; // which slice of a wide cover image to show
+const MINIGAME_COVER_TOP = () => H * 0.16;
+const MINIGAME_COVER_H = () => H * 0.20;
+const MINIGAME_PEEK_POKE_FRAC = 0.30; // fraction of the doctor sprite that rises above cover
+const MINIGAME_GROUND_Y = () => groundY();
+
+function minigameCoverWidth() { return (W / MINIGAME_SLOT_KEYS.length) * 0.92; }
+// doctor.png is roughly square — size it off the lane width (not a fixed H
+// fraction) so it never bleeds into a neighboring hiding spot
+function minigameDoctorSize() {
+  const dw = minigameCoverWidth() * 0.82;
+  const dh = dw / aspectOf('doctor', 1);
+  return { dw, dh };
+}
+
+function minigamePlayerHeight() { return H * 0.20; }
+function minigamePlayerWidth() { return minigamePlayerHeight() * aspectOf('player', 600 / 900); }
+
+let mg = null;
+
+function startMinigame() {
+  state = "minigame";
+  document.getElementById("hud").classList.add("hidden");
+  document.getElementById("minigameControls").classList.remove("hidden");
+  resetMinigame();
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function resetMinigame() {
+  const slots = MINIGAME_SLOT_KEYS.map((coverKey, i) => ({
+    x: W * (i + 0.5) / MINIGAME_SLOT_KEYS.length,
+    coverKey,
+    hAlign: MINIGAME_SLOT_HALIGN[i] ?? 0.5,
+    peeking: false,
+    peekUntil: 0,
+    nextPeekAt: 0.8 + Math.random() * 1.4 + i * 0.35,
+    hasShot: false,
+  }));
+  mg = {
+    playerX: W * 0.5,
+    lives: MINIGAME_LIVES,
+    hits: 0,
+    cakes: [],
+    syringes: [],
+    slots,
+    moveLeft: false,
+    moveRight: false,
+    shootCooldown: 0,
+    timer: 0,
+    ending: null, // null | 'win' | 'lose'
+    endTimer: 0,
+    hitFlash: 0,
+  };
+}
+
+function minigameShoot() {
+  if (state !== "minigame" || !mg || mg.ending) return;
+  if (mg.shootCooldown > 0) return;
+  mg.shootCooldown = 0.4;
+  mg.cakes.push({
+    x: mg.playerX,
+    y: MINIGAME_GROUND_Y() - minigamePlayerHeight(),
+    vy: H * 1.1,
+    size: H * 0.05,
+  });
+  try { playTone(300, getAudioCtx().currentTime, 0.08, "square", 0.10); } catch (e) {}
+}
+
+function endMinigame() {
+  document.getElementById("minigameControls").classList.add("hidden");
+  if (mg.ending === "win") {
+    showEggMessage("6 Treffer! Gut gemacht!", 1800);
+    playChime();
+  } else {
+    showEggMessage("Keine Leben mehr... weiter geht's!", 1800);
+  }
+  mg = null;
+  state = "playing";
+  document.getElementById("hud").classList.remove("hidden");
+}
+
+function updateMinigame(dt) {
+  const m = mg;
+  m.timer += dt;
+  m.shootCooldown = Math.max(0, m.shootCooldown - dt);
+  m.hitFlash = Math.max(0, m.hitFlash - dt);
+
+  if (m.ending) {
+    m.endTimer += dt;
+    if (m.endTimer >= 1.6) endMinigame();
+    return;
+  }
+
+  const speed = W * 0.9;
+  const margin = minigamePlayerWidth() / 2;
+  if (m.moveLeft) m.playerX -= speed * dt;
+  if (m.moveRight) m.playerX += speed * dt;
+  m.playerX = Math.max(margin, Math.min(W - margin, m.playerX));
+
+  const { dw, dh } = minigameDoctorSize();
+  const peekVisibleH = dh * MINIGAME_PEEK_POKE_FRAC;
+  const peekTop = MINIGAME_COVER_TOP() - peekVisibleH;
+
+  for (const s of m.slots) {
+    if (!s.peeking) {
+      if (m.timer >= s.nextPeekAt) {
+        s.peeking = true;
+        s.peekUntil = m.timer + 1.1 + Math.random() * 0.6;
+        s.hasShot = false;
+      }
+    } else {
+      if (!s.hasShot && m.timer >= s.peekUntil - 0.5) {
+        s.hasShot = true;
+        m.syringes.push({ x: s.x, y: peekTop + peekVisibleH * 0.5, vy: H * 0.5 });
+      }
+      if (m.timer >= s.peekUntil) {
+        s.peeking = false;
+        s.nextPeekAt = m.timer + 1.0 + Math.random() * 1.8;
+      }
+    }
+  }
+
+  for (let i = m.cakes.length - 1; i >= 0; i--) {
+    const c = m.cakes[i];
+    c.y -= c.vy * dt;
+    if (c.y < -60) { m.cakes.splice(i, 1); continue; }
+    for (const s of m.slots) {
+      if (!s.peeking) continue;
+      if (aabbOverlap(c.x - c.size / 2, c.y - c.size / 2, c.size, c.size, s.x - dw / 2, peekTop, dw, peekVisibleH)) {
+        m.hits += 1;
+        s.peeking = false;
+        s.nextPeekAt = m.timer + 1.2 + Math.random() * 1.6;
+        m.cakes.splice(i, 1);
+        spawnSparkle(s.x, peekTop, 12);
+        if (m.hits >= MINIGAME_HITS_NEEDED) { m.ending = "win"; m.endTimer = 0; }
+        break;
+      }
+    }
+  }
+
+  const pW = minigamePlayerWidth(), pH = minigamePlayerHeight();
+  const pTop = MINIGAME_GROUND_Y() - pH;
+  for (let i = m.syringes.length - 1; i >= 0; i--) {
+    const sy = m.syringes[i];
+    sy.y += sy.vy * dt;
+    if (sy.y > H + 80) { m.syringes.splice(i, 1); continue; }
+    const sw = H * 0.05, sh = H * 0.05;
+    if (aabbOverlap(sy.x - sw / 2, sy.y - sh / 2, sw, sh, m.playerX - pW / 2, pTop, pW, pH)) {
+      m.syringes.splice(i, 1);
+      m.lives -= 1;
+      m.hitFlash = 0.4;
+      if (m.lives <= 0) { m.ending = "lose"; m.endTimer = 0; }
+    }
+  }
+}
+
+// draws img cropped (not squashed) to exactly fill dw x dh, like CSS
+// background-size:cover — needed because background_1 is a wide panorama
+// and each hiding slot only gets a narrow sliver of it
+function drawCoverFit(img, dx, dy, dw, dh, hAlign) {
+  const srcAspect = img.naturalWidth / img.naturalHeight;
+  const destAspect = dw / dh;
+  let sx, sy, sw, sh;
+  if (srcAspect > destAspect) {
+    sh = img.naturalHeight;
+    sw = sh * destAspect;
+    sx = (img.naturalWidth - sw) * hAlign;
+    sy = 0;
+  } else {
+    sw = img.naturalWidth;
+    sh = sw / destAspect;
+    sx = 0;
+    sy = (img.naturalHeight - sh) * 0.5;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+}
+
+function drawMinigame() {
+  drawBackground();
+  drawGroundAndGrid();
+
+  const m = mg;
+  if (!m) return;
+
+  const { dw, dh } = minigameDoctorSize();
+  const peekVisibleH = dh * MINIGAME_PEEK_POKE_FRAC;
+  const peekTop = MINIGAME_COVER_TOP() - peekVisibleH;
+  const coverH = MINIGAME_COVER_H();
+  const coverW = minigameCoverWidth();
+
+  for (const s of m.slots) {
+    if (s.peeking && imgReady('doctor')) {
+      ctx.drawImage(images.doctor, s.x - dw / 2, peekTop, dw, dh);
+    }
+    if (imgReady(s.coverKey)) {
+      drawCoverFit(images[s.coverKey], s.x - coverW / 2, MINIGAME_COVER_TOP(), coverW, coverH, s.hAlign);
+    }
+  }
+
+  for (const sy of m.syringes) {
+    const sz = H * 0.065;
+    if (imgReady('spritze')) ctx.drawImage(images.spritze, sy.x - sz / 2, sy.y - sz / 2, sz, sz);
+  }
+
+  for (const c of m.cakes) {
+    if (imgReady('cake')) ctx.drawImage(images.cake, c.x - c.size / 2, c.y - c.size / 2, c.size, c.size);
+  }
+
+  const pW = minigamePlayerWidth(), pH = minigamePlayerHeight();
+  const pTop = MINIGAME_GROUND_Y() - pH;
+  if (imgReady('player')) ctx.drawImage(images.player, m.playerX - pW / 2, pTop, pW, pH);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.font = "700 " + (H * 0.032) + "px 'Playfair Display', serif";
+  ctx.fillStyle = "#2b1a0d";
+  ctx.fillText("Treffer: " + m.hits + " / " + MINIGAME_HITS_NEEDED, H * 0.03, H * 0.03);
+  ctx.fillText("Leben: " + "❤".repeat(Math.max(0, m.lives)), H * 0.03, H * 0.03 + H * 0.05);
+
+  if (m.hitFlash > 0) {
+    ctx.fillStyle = "rgba(200,20,20," + (m.hitFlash * 0.5).toFixed(2) + ")";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  drawParticles();
+}
+
+/* ============================================================
    MAIN LOOP
    ============================================================ */
 let lastTime = 0;
@@ -1483,12 +1874,18 @@ function loop(ts) {
   if (state === "intro") updateIntro(dt);
   else if (state === "playing") update(dt);
   else if (state === "caught") updateCaught(dt);
+  else if (state === "minigame") updateMinigame(dt);
   updateParticles(dt);
 
   if (state === "intro" || state === "playing" || state === "caught") {
     render();
     requestAnimationFrame(loop);
+  } else if (state === "minigame") {
+    drawMinigame();
+    requestAnimationFrame(loop);
   } else if (state === "gameover") {
+    render();
+  } else if (state === "trivia") {
     render();
   }
 }
