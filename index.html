@@ -270,6 +270,10 @@ loadImage('cake', 'assets/cake.png');
 loadImage('gift', 'assets/gift.png');
 loadImage('street', 'assets/street.png');
 loadImage('sun', 'assets/sun.png');
+loadImage('moon', 'assets/moon.png');
+loadImage('head1_zu', 'assets/Head_1_zu.png');
+loadImage('head1_offen', 'assets/Head_1_offen.png');
+loadImage('head2', 'assets/Head_2.png');
 loadImage('bike', 'assets/bike.png');
 // REPLACE: no dedicated 26th-birthday photo yet — drop one in and uncomment:
 // loadImage('birthday26', 'assets/birthday26.jpg');
@@ -389,7 +393,7 @@ const player = {
 };
 
 function playerHeight() {
-  return player.duckHeld && player.grounded ? PLAYER_DUCK_H() : PLAYER_STAND_H();
+  return player.duckHeld ? PLAYER_DUCK_H() : PLAYER_STAND_H();
 }
 function playerWidth() {
   return playerHeight() * aspectOf('player', 600 / 900);
@@ -415,6 +419,20 @@ let spawnCursor = 0;
 
 const OVERHANG_BOTTOM_RATIO = 0.635; // fraction of H; must duck under this
 const ROCK_HEIGHT = () => H * 0.105; // must be well under max jump apex (~0.184H)
+
+// head-gate — a big head you simply run through the open mouth of. Standing
+// height clears it with room to spare and ducking obviously does too; only
+// jumping raises her into the danger zone. Danger zone is intentionally a
+// SUBSET of the (much taller) visual, never bigger than what's drawn.
+const HEADGATE_DANGER_BOTTOM = () => H * 0.50;
+const HEADGATE_VISUAL_HEIGHT = () => H * 0.62;
+const HEAD1_TRIGGER_SCORE = 12;   // one-off, appears once
+const HEAD2_INTERVAL = 15;
+let head1Fired = false;
+let nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD2_INTERVAL; // 27, then 42, 57, ...
+// vertical center of each mouth cavity within its own image (measured),
+// used to anchor the gate on the actual passage rather than the image top
+const MOUTH_CENTER_FRAC = { head1_zu: 0.64, head1_offen: 0.64, head2: 0.66 };
 
 // Obstacles hitbox is narrower than the icon on purpose (easier gameplay),
 // but the icon itself is drawn full-size and centered over that hitbox —
@@ -580,22 +598,75 @@ function drawPeek() {
   ctx.drawImage(img, peek.x - w / 2, y - h, w, h);
 }
 
+/* ============================================================
+   DAY / NIGHT CYCLE — toggles every 26 points, eased crossfade
+   ============================================================ */
+let nightAmount = 0; // 0 = full day, 1 = full night
+function updateDayNight(dt) {
+  const target = Math.floor(score / 26) % 2; // 0,1,0,1... every 26 points
+  const rate = 0.6; // fraction per second — ~1.7s to fully cross-fade
+  if (nightAmount < target) nightAmount = Math.min(target, nightAmount + rate * dt);
+  else if (nightAmount > target) nightAmount = Math.max(target, nightAmount - rate * dt);
+}
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
+const NIGHT_STARS = (() => {
+  let s = 7;
+  const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const arr = [];
+  for (let i = 0; i < 50; i++) arr.push({ xf: rand(), yf: rand() * 0.6, r: 1 + rand() * 1.5, phase: rand() * Math.PI * 2 });
+  return arr;
+})();
+function drawStars(alpha) {
+  for (const s of NIGHT_STARS) {
+    const tw = 0.5 + 0.5 * Math.abs(Math.sin(elapsed * 1.5 + s.phase));
+    ctx.globalAlpha = alpha * tw;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(s.xf * W, s.yf * groundY(), s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+const SKY_DAY = { top: [217, 196, 156], mid: [232, 215, 174], bot: [240, 226, 189] };
+const SKY_NIGHT = { top: [18, 17, 38], mid: [30, 27, 58], bot: [48, 42, 78] };
+
 function drawBackground() {
-  // aged parchment sky
+  const n = nightAmount;
+  // aged parchment sky by day, deep indigo by night — smoothly lerped
+  const top = lerpColor(SKY_DAY.top, SKY_NIGHT.top, n);
+  const mid = lerpColor(SKY_DAY.mid, SKY_NIGHT.mid, n);
+  const bot = lerpColor(SKY_DAY.bot, SKY_NIGHT.bot, n);
   const sky = ctx.createLinearGradient(0, 0, 0, groundY());
-  sky.addColorStop(0, "#d9c49c");
-  sky.addColorStop(0.55, "#e8d7ae");
-  sky.addColorStop(1, "#f0e2bd");
+  sky.addColorStop(0, `rgb(${top[0]},${top[1]},${top[2]})`);
+  sky.addColorStop(0.55, `rgb(${mid[0]},${mid[1]},${mid[2]})`);
+  sky.addColorStop(1, `rgb(${bot[0]},${bot[1]},${bot[2]})`);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, groundY());
 
-  // sun
+  if (n > 0.02) drawStars(n);
+
+  // sun by day, moon by night — cross-fades as nightAmount changes
   const sunX = W * 0.82, sunY = H * 0.18, sunR = H * 0.06;
-  if (imgReady('sun')) {
-    const d = sunR * 3.4;
+  const d = sunR * 3.4;
+  if (n < 0.98 && imgReady('sun')) {
+    ctx.globalAlpha = 1 - n;
     ctx.drawImage(images.sun, sunX - d / 2, sunY - d / 2, d, d);
-  } else {
-    // REPLACE: sun placeholder — simple engraved-look disc with rays
+    ctx.globalAlpha = 1;
+  }
+  if (n > 0.02 && imgReady('moon')) {
+    ctx.globalAlpha = n;
+    ctx.drawImage(images.moon, sunX - d / 2, sunY - d / 2, d, d);
+    ctx.globalAlpha = 1;
+  }
+  if (!imgReady('sun') && !imgReady('moon')) {
+    // REPLACE: sun/moon placeholder — simple engraved-look disc with rays
     ctx.strokeStyle = "rgba(90,60,30,0.4)";
     ctx.lineWidth = Math.max(1.5, H * 0.003);
     for (let i = 0; i < 16; i++) {
@@ -626,6 +697,12 @@ function drawBackground() {
   mist.addColorStop(1, "rgba(235,215,175,0.4)");
   ctx.fillStyle = mist;
   ctx.fillRect(0, groundY() - H * 0.12, W, H * 0.12);
+
+  // night tint over the mountains/mist for a cohesive dusk-to-night mood
+  if (n > 0.02) {
+    ctx.fillStyle = `rgba(10,8,28,${(n * 0.45).toFixed(2)})`;
+    ctx.fillRect(0, 0, W, groundY() + H * 0.05);
+  }
 }
 
 function drawGroundAndGrid() {
@@ -655,6 +732,10 @@ function drawGroundAndGrid() {
     ctx.fillRect(0, gy, W, H - gy);
     ctx.fillStyle = "#2f2213";
     ctx.fillRect(0, gy, W, Math.max(2, H * 0.006));
+  }
+  if (nightAmount > 0.02) {
+    ctx.fillStyle = `rgba(8,6,20,${(nightAmount * 0.5).toFixed(2)})`;
+    ctx.fillRect(0, gy, W, H - gy);
   }
 }
 
@@ -716,6 +797,23 @@ function generateAhead() {
   }
 }
 
+function spawnHeadGate(variant) {
+  const playerScreenX = W * PLAYER_SCREEN_X_RATIO;
+  const leadDistance = H * 1.4; // enough runway to see it coming
+  const spawnX = cameraX + playerScreenX + leadDistance;
+  const height = HEADGATE_VISUAL_HEIGHT();
+  const spriteKey = variant === "head1" ? "head1_zu" : "head2";
+  const width = height * aspectOf(spriteKey, 0.8);
+  // clear a clean approach so a procedurally-generated obstacle can't
+  // overlap this scripted one
+  obstacles = obstacles.filter(o => o.x < spawnX - width || o.x > spawnX + width * 2);
+  obstacles.push({
+    type: "headgate", variant, x: spawnX, width, drawWidth: width, height,
+    spriteKey, opened: variant !== "head1",
+  });
+  spawnCursor = Math.max(spawnCursor, spawnX + width * 2.2);
+}
+
 function pruneBehindCamera() {
   obstacles = obstacles.filter(o => o.x + o.width / 2 + o.drawWidth / 2 > cameraX - W * 0.3);
   items = items.filter(it => !it.collected && it.x + it.size > cameraX - W * 0.3);
@@ -733,6 +831,9 @@ function resetGame() {
   doctorDancing = false;
   bikePowerupFired = false;
   bikeActive = false;
+  nightAmount = 0;
+  head1Fired = false;
+  nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD2_INTERVAL;
   particles = [];
 
   player.hoverY = 0;
@@ -945,13 +1046,17 @@ function update(dt) {
   generateAhead();
   pruneBehindCamera();
   updatePeek(dt);
+  updateDayNight(dt);
 
   const playerScreenX = W * PLAYER_SCREEN_X_RATIO;
   const playerWorldX = cameraX + playerScreenX;
 
   // --- player vertical physics (hover above ground baseline) ---
   const GRAVITY = H * 3.6;
-  player.vy -= GRAVITY * dt;
+  // fast-fall: holding duck while airborne drops her out of the jump
+  // much quicker, so jump→duck feels snappy instead of floaty
+  const fallMult = (player.duckHeld && !player.grounded) ? 2.4 : 1;
+  player.vy -= GRAVITY * fallMult * dt;
   player.hoverY += player.vy * dt;
   if (player.hoverY <= 0) {
     player.hoverY = 0;
@@ -985,6 +1090,8 @@ function update(dt) {
       }
       if (score === 1307 && !egg1307Fired) triggerEgg1307();
       if (score === BIKE_TRIGGER_SCORE && !bikePowerupFired) triggerBikePowerup();
+      if (score === HEAD1_TRIGGER_SCORE && !head1Fired) { head1Fired = true; spawnHeadGate("head1"); }
+      if (score >= nextHead2Score) { spawnHeadGate("head2"); nextHead2Score += HEAD2_INTERVAL; }
     }
   }
 
@@ -996,6 +1103,14 @@ function update(dt) {
       if (o.type === "rock") {
         const rockH = ROCK_HEIGHT();
         if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, groundY() - rockH, o.width, rockH)) {
+          triggerCatch();
+          return;
+        }
+      } else if (o.type === "headgate") {
+        // danger zone is only the upper portion — well under the tall
+        // visual — so standing/ducking always clears it and only a jump
+        // raises her into it
+        if (aabbOverlap(playerScreenX, pTop, pW, pH, osx, 0, o.width, HEADGATE_DANGER_BOTTOM())) {
           triggerCatch();
           return;
         }
@@ -1050,6 +1165,26 @@ function drawObstacles() {
       } else {
         ctx.fillStyle = "#8a6a42";
         ctx.fillRect(drawX, top, o.drawWidth, h);
+      }
+    } else if (o.type === "headgate") {
+      // the mouth pops open automatically once she gets close — purely
+      // a visual reveal, the passable danger zone never changes
+      if (o.variant === "head1" && !o.opened) {
+        const worldDist = o.x - (cameraX + W * PLAYER_SCREEN_X_RATIO);
+        if (worldDist < H * 0.9) { o.opened = true; o.spriteKey = "head1_offen"; }
+      }
+      const drawX = cx - o.drawWidth / 2;
+      // anchor on the mouth's own center (measured per sprite), not the
+      // image's bounding-box top, so the passage lines up with where she
+      // actually runs rather than floating high above her
+      const mouthFrac = MOUTH_CENTER_FRAC[o.spriteKey] || 0.65;
+      const mouthTargetY = HEADGATE_DANGER_BOTTOM() + H * 0.10;
+      const drawY = mouthTargetY - mouthFrac * o.height;
+      if (imgReady(o.spriteKey)) {
+        ctx.drawImage(images[o.spriteKey], drawX, drawY, o.drawWidth, o.height);
+      } else {
+        ctx.fillStyle = "#5c4a38";
+        ctx.fillRect(drawX, drawY, o.drawWidth, o.height);
       }
     } else {
       const sway = Math.sin(elapsed * 2 + o.wobble) * 0.09;
