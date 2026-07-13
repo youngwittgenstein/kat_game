@@ -90,6 +90,13 @@
     padding: 0.5em 1em;
     border-radius: 4px;
   }
+  .controlsHint.newHighscore {
+    color: #7a2530 !important;
+    font-weight: 700 !important;
+    background: rgba(201,162,74,0.25);
+    border-color: #c9a24a;
+    opacity: 1 !important;
+  }
 
   .bigBtn {
     font-family: 'Playfair Display', serif;
@@ -221,12 +228,14 @@
   <p>Escape the Doctor</p>
   <button id="startBtn" class="bigBtn">START</button>
   <p class="controlsHint">Oben tippen = Springen &nbsp;|&nbsp; Unten halten = Ducken</p>
+  <p class="controlsHint" id="startHighscore">Highscore: 0</p>
 </div>
 
 <div id="gameOverScreen" class="overlay hidden">
   <h1>Game Over</h1>
   <p>Sie haben einen Bandscheibenvorfall...</p>
   <p id="finalScore">Punkte: 0</p>
+  <p class="controlsHint" id="gameOverHighscore">Highscore: 0</p>
   <div id="egg26Panel">
     <div id="egg26PhotoBox"></div>
     <p style="margin:0;font-weight:800;color:#7a2530;">Alles Gute zum 26., Katalin!</p>
@@ -242,6 +251,21 @@
    ============================================================ */
 const NAME_PLACEHOLDER = "Katalin";
 document.getElementById("nameSpan").textContent = NAME_PLACEHOLDER;
+
+/* ============================================================
+   HIGHSCORE — saved locally per browser/device, no backend needed
+   ============================================================ */
+const HIGHSCORE_KEY = "katGameHighscore";
+function getHighscore() {
+  return parseInt(localStorage.getItem(HIGHSCORE_KEY) || "0", 10);
+}
+function setHighscore(v) {
+  try { localStorage.setItem(HIGHSCORE_KEY, String(v)); } catch (e) {}
+}
+function refreshHighscoreDisplay() {
+  document.getElementById("startHighscore").textContent = "Highscore: " + getHighscore();
+}
+refreshHighscoreDisplay();
 
 /* ============================================================
    Sprite / photo loading. Vintage Victorian-engraving cut-out
@@ -897,6 +921,13 @@ function finalizeGameOver() {
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("eggMessage").classList.remove("show");
   document.getElementById("finalScore").textContent = "Punkte: " + score;
+  const prevHighscore = getHighscore();
+  const isNewHighscore = score > prevHighscore;
+  if (isNewHighscore) setHighscore(score);
+  const gameOverHighscoreEl = document.getElementById("gameOverHighscore");
+  gameOverHighscoreEl.textContent = isNewHighscore ? "Neuer Highscore!" : "Highscore: " + prevHighscore;
+  gameOverHighscoreEl.classList.toggle("newHighscore", isNewHighscore);
+  refreshHighscoreDisplay();
   const panel = document.getElementById("egg26Panel");
   const box = document.getElementById("egg26PhotoBox");
   if (score >= 26) {
