@@ -515,9 +515,10 @@ function playBikeBell() {
    ============================================================ */
 function tryJump() {
   if (state !== "playing") return;
-  const maxJumps = secretUnlocked ? Infinity : 1;
+  const maxJumps = secretUnlocked ? Infinity : 2; // everyone gets a double jump; the secret grants unlimited
   if (player.grounded || player.jumpsUsed < maxJumps) {
-    player.vy = H * 1.15;
+    const isExtraJump = !player.grounded && player.jumpsUsed >= 1;
+    player.vy = isExtraJump ? H * 0.80 : H * 1.15; // the follow-up hop is a bit weaker than the first
     player.jumpsUsed += 1;
     player.grounded = false;
     player.duckHeld = false;
