@@ -504,6 +504,12 @@ const PLAYER_DUCK_H = () => H * 0.14;
 const JUMP_FATIGUE_ADD = 0.05;      // per extra (non-first) jump used
 const DUCK_FATIGUE_RATE = 0.05;     // per second spent ducking
 const FATIGUE_RECOVERY_RATE = 0.09; // per second spent doing neither
+// night makes fatigue harder to shake off — builds faster, recovers
+// slower — for a "hopefully it's day soon" pressure during a hard stretch
+const NIGHT_FATIGUE_GAIN_BOOST = 0.6;   // up to +60% gain at full night
+const NIGHT_FATIGUE_RECOVERY_CUT = 0.4; // down to -40% recovery at full night
+function fatigueGainMul() { return 1 + nightAmount * NIGHT_FATIGUE_GAIN_BOOST; }
+function fatigueRecoveryMul() { return 1 - nightAmount * NIGHT_FATIGUE_RECOVERY_CUT; }
 
 const player = {
   hoverY: 0, vy: 0,          // hoverY = height above ground baseline
@@ -653,7 +659,7 @@ function tryJump() {
     player.grounded = false;
     player.duckHeld = false;
     // the first jump is "free" — only spammed extra/double jumps tire her out
-    if (isExtraJump) player.fatigue = Math.min(1, player.fatigue + JUMP_FATIGUE_ADD);
+    if (isExtraJump) player.fatigue = Math.min(1, player.fatigue + JUMP_FATIGUE_ADD * fatigueGainMul());
   }
 }
 function startDuck() { if (state === "playing") player.duckHeld = true; }
@@ -1269,11 +1275,12 @@ function update(dt) {
   player.runPhase += dt * (5 + scrollSpeed / H * 4);
 
   // ducking builds fatigue while held; recovers whenever she's not ducking
-  // (extra jumps add their own chunk directly in tryJump())
+  // (extra jumps add their own chunk directly in tryJump()) — both are
+  // scaled by the day/night cycle, harsher at night
   if (player.duckHeld) {
-    player.fatigue = Math.min(1, player.fatigue + DUCK_FATIGUE_RATE * dt);
+    player.fatigue = Math.min(1, player.fatigue + DUCK_FATIGUE_RATE * fatigueGainMul() * dt);
   } else {
-    player.fatigue = Math.max(0, player.fatigue - FATIGUE_RECOVERY_RATE * dt);
+    player.fatigue = Math.max(0, player.fatigue - FATIGUE_RECOVERY_RATE * fatigueRecoveryMul() * dt);
   }
 
   const pW = playerWidth();
