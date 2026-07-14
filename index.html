@@ -1651,6 +1651,7 @@ function resumeAfterTrivia() {
   state = "playing";
   document.getElementById("hud").classList.remove("hidden");
   showEggMessage("Falsche Antwort... weiter geht's!", 1600);
+  clearObstaclesAheadForResume();
   lastTime = performance.now();
   requestAnimationFrame(loop);
 }
@@ -1686,6 +1687,7 @@ document.getElementById("triviaContinueBtn").addEventListener("click", () => {
 const MINIGAME_LIVES = 3;
 const MINIGAME_HITS_NEEDED = 6;
 const MINIGAME_SETBACK = 18; // how far below the gate score a loss sends her back
+const MINIGAME_RESUME_CLEAR_DISTANCE = () => H * 3.2; // runway cleared of obstacles when the runner resumes
 const MINIGAME_MAX_CONCURRENT_DOCTORS = 2;
 // scattered along the hiding wall purely for atmosphere ("Bücher, Berge
 // und Diagnosen") — books plus a couple of medical instrument icons
@@ -1760,6 +1762,17 @@ function minigameShoot() {
   try { playTone(300, getAudioCtx().currentTime, 0.08, "square", 0.10); } catch (e) {}
 }
 
+// obstacles keep their world position while she's away in the minigame,
+// so without this an obstacle that happened to be right in front of her
+// when the gate triggered would still be right in front of her — with no
+// time left to react — the instant she's dropped back in
+function clearObstaclesAheadForResume() {
+  const playerWorldX = cameraX + W * PLAYER_SCREEN_X_RATIO;
+  const clearUntil = playerWorldX + MINIGAME_RESUME_CLEAR_DISTANCE();
+  obstacles = obstacles.filter(o => o.x < playerWorldX || o.x > clearUntil);
+  spawnCursor = Math.max(spawnCursor, clearUntil);
+}
+
 function endMinigame() {
   document.getElementById("minigameControls").classList.add("hidden");
   if (mg.ending === "win") {
@@ -1773,6 +1786,7 @@ function endMinigame() {
     updateScoreDisplay();
     showEggMessage("Die Diagnose holt dich ein... zurück auf " + score, 1900);
   }
+  clearObstaclesAheadForResume();
   mg = null;
   state = "playing";
   document.getElementById("hud").classList.remove("hidden");
@@ -1791,10 +1805,12 @@ function updateMinigame(dt) {
   }
 
   const speed = W * 0.9;
-  const margin = minigamePlayerWidth() / 2;
   if (m.moveLeft) m.playerX -= speed * dt;
   if (m.moveRight) m.playerX += speed * dt;
-  m.playerX = Math.max(margin, Math.min(W - margin, m.playerX));
+  // wrap around like Pac-Man instead of clamping — cornered against an
+  // edge with a syringe inbound used to leave no way to dodge
+  if (m.playerX < 0) m.playerX += W;
+  else if (m.playerX > W) m.playerX -= W;
 
   const { dw, dh } = minigameDoctorSize();
   const peekVisibleH = dh * MINIGAME_PEEK_POKE_FRAC;
