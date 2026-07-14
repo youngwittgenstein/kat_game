@@ -464,12 +464,15 @@ let doctorDancing = false;
 let doctorDanceEnd = 0;
 let introTimer = 0;
 
-let bikePowerupFired = false;
+let bikePowerupFired = false; // still false until the bike item is actually collected
 let bikeActive = false;
 let bikeEndTime = 0;
-const BIKE_TRIGGER_SCORE = 11; // "ab ca. 10-12 Punkten"
+const BIKE_TRIGGER_SCORE = 11; // "ab ca. 10-12 Punkten" — first bike appears here
 const BIKE_DURATION = 7;       // seconds of clear straight-track riding
 const BIKE_SPEED_MULT = 1.4;
+const BIKE_INTERVAL = 37;      // how far apart recurring bike pickups spawn, after the first
+const BIKE_INTERVAL_JITTER = 5;
+let nextBikeScore = BIKE_TRIGGER_SCORE;
 
 // "42" trivia gate — recurs at every multiple of 42 points. The runner
 // pauses for a Hitchhiker's Guide easter egg; answering correctly unlocks
@@ -958,6 +961,23 @@ function spawnHeadGate(variant) {
   spawnCursor = Math.max(spawnCursor, spawnX + width * 2.2);
 }
 
+// the bike is a real collectible now, not an automatic score trigger — the
+// very first one lies flat on the ground so it takes zero skill to grab;
+// every later one floats like the other items, but rarely
+function spawnBikeItem(onGround) {
+  const playerScreenX = W * PLAYER_SCREEN_X_RATIO;
+  const leadDistance = H * 1.4;
+  const spawnX = cameraX + playerScreenX + leadDistance;
+  const size = H * 0.075;
+  const y = onGround ? groundY() - size : groundY() - size - H * (0.10 + Math.random() * 0.15);
+  // guarantee a clean grab — especially important the first time, on the
+  // ground, which should take zero skill to collect
+  const clearRadius = size * 3;
+  obstacles = obstacles.filter(o => o.x < spawnX - clearRadius || o.x > spawnX + clearRadius);
+  items.push({ kind: "bike", x: spawnX, y, size, collected: false });
+  spawnCursor = Math.max(spawnCursor, spawnX + size * 2.2);
+}
+
 function pruneBehindCamera() {
   obstacles = obstacles.filter(o => o.x + o.width / 2 + o.drawWidth / 2 > cameraX - W * 0.3);
   items = items.filter(it => !it.collected && it.x + it.size > cameraX - W * 0.3);
@@ -976,6 +996,7 @@ function resetGame() {
   bikePowerupFired = false;
   bikeActive = false;
   nightAmount = 0;
+  nextBikeScore = BIKE_TRIGGER_SCORE;
   nextHead1Score = HEAD1_TRIGGER_SCORE;
   nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD_GATE_MIN_GAP;
   nextMinigameScore = MINIGAME_TRIGGER_SCORE;
@@ -1240,12 +1261,19 @@ function update(dt) {
         // collected in the background as minigame "ammo" — never shown as
         // score, only visible inside the shooting-gallery minigame itself
         cakesCollected += 1;
+      } else if (it.kind === "bike") {
+        player.sparkleUntil = elapsed + 0.35;
+        spawnSparkle(playerScreenX + pW / 2, pTop, 18);
+        triggerBikePowerup();
       } else {
         player.sparkleUntil = elapsed + 0.35;
         spawnSparkle(playerScreenX + pW / 2, pTop, 14);
       }
       if (score === 1307 && !egg1307Fired) triggerEgg1307();
-      if (score === BIKE_TRIGGER_SCORE && !bikePowerupFired) triggerBikePowerup();
+      if (score >= nextBikeScore) {
+        spawnBikeItem(!bikePowerupFired); // lies flat on the ground the very first time
+        nextBikeScore = score + BIKE_INTERVAL + (Math.random() * 2 - 1) * BIKE_INTERVAL_JITTER;
+      }
       if (score >= nextHead1Score) {
         if (isNightNow()) { nextHead1Score = score + 2; } // a daydream — wait for daylight
         else { spawnHeadGate("head1"); nextHead1Score = score + randHeadGateGap(); }
@@ -1410,6 +1438,24 @@ function drawItems() {
         ctx.textBaseline = "middle";
         ctx.fillText("🎂", sx + it.size / 2, it.y + bob + it.size / 2 + 1);
       }
+    } else if (it.kind === "bike") {
+      // rare and valuable — a pulsing golden glow marks it out from the
+      // regular cake/gift clutter so it reads as something special
+      const pulse = 0.6 + Math.sin(elapsed * 4 + it.x) * 0.4;
+      ctx.save();
+      ctx.shadowColor = "rgba(255, 205, 90, 0.95)";
+      ctx.shadowBlur = it.size * (0.55 + pulse * 0.35);
+      if (imgReady("bike")) {
+        ctx.drawImage(images.bike, sx, it.y + bob, it.size, it.size);
+      } else {
+        ctx.fillStyle = "#c9a24a";
+        ctx.fillRect(sx, it.y + bob, it.size, it.size);
+        ctx.font = (it.size * 0.9) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🚲", sx + it.size / 2, it.y + bob + it.size / 2 + 1);
+      }
+      ctx.restore();
     } else {
       if (imgReady("gift")) {
         ctx.drawImage(images.gift, sx, it.y + bob, it.size, it.size);
