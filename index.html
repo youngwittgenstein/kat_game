@@ -498,6 +498,13 @@ const PLAYER_SCREEN_X_RATIO = 0.24;
 const PLAYER_STAND_H = () => H * 0.20;
 const PLAYER_DUCK_H = () => H * 0.14;
 
+// "fatigue" — spamming double-jumps or ducking for long stretches is what
+// lets the doctor actually gain ground (see the doctor-AI comment below);
+// playing clean never lets him get faster than her on its own
+const JUMP_FATIGUE_ADD = 0.05;      // per extra (non-first) jump used
+const DUCK_FATIGUE_RATE = 0.05;     // per second spent ducking
+const FATIGUE_RECOVERY_RATE = 0.09; // per second spent doing neither
+
 const player = {
   hoverY: 0, vy: 0,          // hoverY = height above ground baseline
   jumpsUsed: 0,
@@ -506,6 +513,7 @@ const player = {
   mouthOpenUntil: 0,
   sparkleUntil: 0,
   runPhase: 0,
+  fatigue: 0,                // 0-1 — builds from spammed extra jumps / prolonged ducking, recovers otherwise. This is what lets the doctor gain ground, not raw elapsed time.
 };
 
 function playerHeight() {
@@ -644,6 +652,8 @@ function tryJump() {
     player.jumpsUsed += 1;
     player.grounded = false;
     player.duckHeld = false;
+    // the first jump is "free" — only spammed extra/double jumps tire her out
+    if (isExtraJump) player.fatigue = Math.min(1, player.fatigue + JUMP_FATIGUE_ADD);
   }
 }
 function startDuck() { if (state === "playing") player.duckHeld = true; }
@@ -1010,6 +1020,7 @@ function resetGame() {
   player.duckHeld = false;
   player.mouthOpenUntil = 0;
   player.sparkleUntil = 0;
+  player.fatigue = 0;
 
   doctor.worldX = cameraX + W * PLAYER_SCREEN_X_RATIO - H * 0.62;
 
@@ -1257,6 +1268,14 @@ function update(dt) {
   }
   player.runPhase += dt * (5 + scrollSpeed / H * 4);
 
+  // ducking builds fatigue while held; recovers whenever she's not ducking
+  // (extra jumps add their own chunk directly in tryJump())
+  if (player.duckHeld) {
+    player.fatigue = Math.min(1, player.fatigue + DUCK_FATIGUE_RATE * dt);
+  } else {
+    player.fatigue = Math.max(0, player.fatigue - FATIGUE_RECOVERY_RATE * dt);
+  }
+
   const pW = playerWidth();
   const pH = playerHeight();
   const pTop = groundY() - player.hoverY - pH;
@@ -1335,11 +1354,19 @@ function update(dt) {
   }
 
   // --- doctor AI (chases from behind; falls behind during the bike phase) ---
+  // On its own he never truly catches her: the time-based creep and the
+  // tension wobble together cap out just under 1.0, i.e. always a hair
+  // slower than her base speed. The only thing that pushes speedMul past
+  // 1.0 — letting him actually gain ground — is her own fatigue, which
+  // only builds from spammed extra jumps or held-down ducking. Play clean
+  // and he never gets faster than you; spam those moves and he does.
   if (doctorDancing) {
     if (elapsed >= doctorDanceEnd) doctorDancing = false;
   } else {
-    const wobble = Math.sin(elapsed * 0.6) * 0.12;
-    const speedMul = 0.80 + Math.min(0.32, elapsed * 0.0016) + wobble;
+    const wobble = Math.sin(elapsed * 0.6) * 0.05; // gentler tension than before
+    const timeCreep = Math.min(0.17, elapsed * 0.00085);
+    const fatiguePenalty = player.fatigue * 0.35;
+    const speedMul = 0.75 + timeCreep + wobble + fatiguePenalty;
     doctor.worldX += baseSpeed * speedMul * dt;
   }
   const maxTrailScreen = H * 0.85;
