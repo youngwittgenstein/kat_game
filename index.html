@@ -471,10 +471,16 @@ const BIKE_TRIGGER_SCORE = 11; // "ab ca. 10-12 Punkten"
 const BIKE_DURATION = 7;       // seconds of clear straight-track riding
 const BIKE_SPEED_MULT = 1.4;
 
-// "42" trivia gate — at this score the runner pauses for a Hitchhiker's
-// Guide easter egg; answering correctly unlocks the shooting-gallery minigame
+// "42" trivia gate — recurs at every multiple of 42 points. The runner
+// pauses for a Hitchhiker's Guide easter egg; answering correctly unlocks
+// the shooting-gallery minigame. Winning moves the gate on to the next
+// multiple of 42; losing leaves it in place so the same gate has to be
+// cleared again once score climbs back up to it.
 const MINIGAME_TRIGGER_SCORE = 42;
-let minigameGateShown = false; // only asked once per run
+let nextMinigameScore = MINIGAME_TRIGGER_SCORE;
+// cake items collected while running double as minigame "ammo" — a
+// background counter, never shown as score, spent only inside the minigame
+let cakesCollected = 0;
 
 // "caught" — a brief freeze-frame where the doctor rushes in and grabs her
 // before the Game Over screen appears, instead of cutting to it instantly
@@ -533,10 +539,16 @@ const ROCK_HEIGHT = () => H * 0.105; // must be well under max jump apex (~0.184
 // SUBSET of the (much taller) visual, never bigger than what's drawn.
 const HEADGATE_DANGER_BOTTOM = () => H * 0.50;
 const HEADGATE_VISUAL_HEIGHT = () => H * 0.62;
-const HEAD1_TRIGGER_SCORE = 12;   // one-off, appears once
-const HEAD2_INTERVAL = 15;
-let head1Fired = false;
-let nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD2_INTERVAL; // 27, then 42, 57, ...
+const HEAD1_TRIGGER_SCORE = 12;    // first appearance, then recurring
+const HEAD_GATE_MIN_GAP = 8;       // point-gap between recurring head-gate attempts
+const HEAD_GATE_MAX_GAP = 16;
+// head1 (her own head) is a daydream — only shows up in daylight; head2
+// (the doctor) is a nightmare — only shows up at night. Both recur
+// randomly from their first eligible score onward.
+let nextHead1Score = HEAD1_TRIGGER_SCORE;
+let nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD_GATE_MIN_GAP;
+function randHeadGateGap() { return HEAD_GATE_MIN_GAP + Math.random() * (HEAD_GATE_MAX_GAP - HEAD_GATE_MIN_GAP); }
+function isNightNow() { return nightAmount >= 0.5; }
 // vertical center of each mouth cavity within its own image (measured),
 // used to anchor the gate on the actual passage rather than the image top
 const MOUTH_CENTER_FRAC = { head1_zu: 0.64, head1_offen: 0.64, head2: 0.66 };
@@ -964,9 +976,10 @@ function resetGame() {
   bikePowerupFired = false;
   bikeActive = false;
   nightAmount = 0;
-  head1Fired = false;
-  nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD2_INTERVAL;
-  minigameGateShown = false;
+  nextHead1Score = HEAD1_TRIGGER_SCORE;
+  nextHead2Score = HEAD1_TRIGGER_SCORE + HEAD_GATE_MIN_GAP;
+  nextMinigameScore = MINIGAME_TRIGGER_SCORE;
+  cakesCollected = 0;
   particles = [];
 
   player.hoverY = 0;
@@ -1224,16 +1237,24 @@ function update(dt) {
         player.mouthOpenUntil = elapsed + 0.35;
         player.sparkleUntil = elapsed + 0.35;
         spawnSparkle(playerScreenX + pW / 2, pTop, 10);
+        // collected in the background as minigame "ammo" — never shown as
+        // score, only visible inside the shooting-gallery minigame itself
+        cakesCollected += 1;
       } else {
         player.sparkleUntil = elapsed + 0.35;
         spawnSparkle(playerScreenX + pW / 2, pTop, 14);
       }
       if (score === 1307 && !egg1307Fired) triggerEgg1307();
       if (score === BIKE_TRIGGER_SCORE && !bikePowerupFired) triggerBikePowerup();
-      if (score === HEAD1_TRIGGER_SCORE && !head1Fired) { head1Fired = true; spawnHeadGate("head1"); }
-      if (score >= nextHead2Score) { spawnHeadGate("head2"); nextHead2Score += HEAD2_INTERVAL; }
-      if (score === MINIGAME_TRIGGER_SCORE && !minigameGateShown) {
-        minigameGateShown = true;
+      if (score >= nextHead1Score) {
+        if (isNightNow()) { nextHead1Score = score + 2; } // a daydream — wait for daylight
+        else { spawnHeadGate("head1"); nextHead1Score = score + randHeadGateGap(); }
+      }
+      if (score >= nextHead2Score) {
+        if (!isNightNow()) { nextHead2Score = score + 2; } // a nightmare — wait for night
+        else { spawnHeadGate("head2"); nextHead2Score = score + randHeadGateGap(); }
+      }
+      if (score >= nextMinigameScore) {
         triggerTriviaGate();
         return;
       }
@@ -1626,6 +1647,7 @@ function triggerTriviaGate() {
 
 function resumeAfterTrivia() {
   document.getElementById("triviaScreen").classList.add("hidden");
+  nextMinigameScore += MINIGAME_TRIGGER_SCORE; // the moment passed — next chance is the next multiple of 42
   state = "playing";
   document.getElementById("hud").classList.remove("hidden");
   showEggMessage("Falsche Antwort... weiter geht's!", 1600);
@@ -1650,30 +1672,33 @@ document.getElementById("triviaContinueBtn").addEventListener("click", () => {
 });
 
 /* ============================================================
-   MINIGAME — Deep Thought's shooting gallery. Reuses the same
-   sprites as the runner: player + cake fired upward at doctors
-   who peek out from behind mountain/books cover and lob syringes
-   back down. 3 lives, 6 hits to win, then the runner resumes.
+   MINIGAME — Deep Thought's shooting gallery. The allegory beat:
+   every multiple of 42 points, she gets a chance to fight back
+   against the diagnosis chasing her. Cake collected while running
+   (a background counter, never shown as score) is the only ammo;
+   doctors pop up at random along a continuous mountain/books/
+   instruments hiding wall and lob syringes back on a diagonal,
+   aimed at wherever she currently stands. 6 hits wins — the gate
+   moves on to the next multiple of 42. Losing all 3 lives, or
+   running dry on cake before 6 hits, sends her back near this gate
+   instead of ending the run outright.
    ============================================================ */
 const MINIGAME_LIVES = 3;
 const MINIGAME_HITS_NEEDED = 6;
-// 'background_1' is the illustrated mountain range (already loaded for the
-// runner's parallax backdrop) — reused here as the "Berge" cover, cropped
-// to a narrow cover-fit slice per slot so 4 slots don't tile one wide
-// panorama into a solid wall. ground_books is the "Bücher" cover.
-const MINIGAME_SLOT_KEYS = ['background_1', 'ground_books', 'background_1', 'ground_books'];
-const MINIGAME_SLOT_HALIGN = [0.15, 0.5, 0.85, 0.5]; // which slice of a wide cover image to show
+const MINIGAME_SETBACK = 18; // how far below the gate score a loss sends her back
+const MINIGAME_MAX_CONCURRENT_DOCTORS = 2;
+// scattered along the hiding wall purely for atmosphere ("Bücher, Berge
+// und Diagnosen") — books plus a couple of medical instrument icons
+const MINIGAME_DECOR_KEYS = ['ground_books', 'overhang_stethoscope', 'ground_books', 'overhang_pocketwatch'];
 const MINIGAME_COVER_TOP = () => H * 0.16;
 const MINIGAME_COVER_H = () => H * 0.20;
-const MINIGAME_PEEK_POKE_FRAC = 0.30; // fraction of the doctor sprite that rises above cover
+const MINIGAME_PEEK_POKE_FRAC = 0.32; // fraction of the doctor sprite that rises above the wall
 const MINIGAME_GROUND_Y = () => groundY();
+const MINIGAME_DOCTOR_MARGIN = 0.10; // keep spawn x away from the very edges
 
-function minigameCoverWidth() { return (W / MINIGAME_SLOT_KEYS.length) * 0.92; }
-// doctor.png is roughly square — size it off the lane width (not a fixed H
-// fraction) so it never bleeds into a neighboring hiding spot
 function minigameDoctorSize() {
-  const dw = minigameCoverWidth() * 0.82;
-  const dh = dw / aspectOf('doctor', 1);
+  const dh = H * 0.18;
+  const dw = dh * aspectOf('doctor', 1);
   return { dw, dh };
 }
 
@@ -1686,28 +1711,30 @@ function startMinigame() {
   state = "minigame";
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("minigameControls").classList.remove("hidden");
-  resetMinigame();
+  resetMinigame(nextMinigameScore);
   lastTime = performance.now();
   requestAnimationFrame(loop);
 }
 
-function resetMinigame() {
-  const slots = MINIGAME_SLOT_KEYS.map((coverKey, i) => ({
-    x: W * (i + 0.5) / MINIGAME_SLOT_KEYS.length,
-    coverKey,
-    hAlign: MINIGAME_SLOT_HALIGN[i] ?? 0.5,
-    peeking: false,
-    peekUntil: 0,
-    nextPeekAt: 0.8 + Math.random() * 1.4 + i * 0.35,
-    hasShot: false,
+function resetMinigame(gateScore) {
+  // kept clearly shorter than the cover band (hFrac < 1) so decor never
+  // rises into the doctors' peek zone above the band and hides them outright
+  const decor = MINIGAME_DECOR_KEYS.map((key, i) => ({
+    key,
+    x: W * (i + 0.35 + Math.random() * 0.3) / MINIGAME_DECOR_KEYS.length,
+    yJitter: (Math.random() - 0.5) * H * 0.02,
+    hFrac: 0.5 + Math.random() * 0.18,
   }));
   mg = {
+    gateScore,
     playerX: W * 0.5,
     lives: MINIGAME_LIVES,
     hits: 0,
     cakes: [],
     syringes: [],
-    slots,
+    doctors: [],
+    decor,
+    nextDoctorAt: 0.6 + Math.random() * 0.8,
     moveLeft: false,
     moveRight: false,
     shootCooldown: 0,
@@ -1721,7 +1748,9 @@ function resetMinigame() {
 function minigameShoot() {
   if (state !== "minigame" || !mg || mg.ending) return;
   if (mg.shootCooldown > 0) return;
-  mg.shootCooldown = 0.4;
+  if (cakesCollected <= 0) return; // no ammo left — collect more cake while running
+  mg.shootCooldown = 0.35;
+  cakesCollected -= 1;
   mg.cakes.push({
     x: mg.playerX,
     y: MINIGAME_GROUND_Y() - minigamePlayerHeight(),
@@ -1734,10 +1763,15 @@ function minigameShoot() {
 function endMinigame() {
   document.getElementById("minigameControls").classList.add("hidden");
   if (mg.ending === "win") {
-    showEggMessage("6 Treffer! Gut gemacht!", 1800);
+    nextMinigameScore = mg.gateScore + MINIGAME_TRIGGER_SCORE; // move on to the next multiple of 42
+    showEggMessage("Die Ärzte fliehen! Weiter geht's...", 1800);
     playChime();
   } else {
-    showEggMessage("Keine Leben mehr... weiter geht's!", 1800);
+    // sent back near the gate, not out — nextMinigameScore stays put so
+    // this same gate has to be cleared again once score climbs back to it
+    score = Math.max(0, mg.gateScore - MINIGAME_SETBACK);
+    updateScoreDisplay();
+    showEggMessage("Die Diagnose holt dich ein... zurück auf " + score, 1900);
   }
   mg = null;
   state = "playing";
@@ -1766,49 +1800,69 @@ function updateMinigame(dt) {
   const peekVisibleH = dh * MINIGAME_PEEK_POKE_FRAC;
   const peekTop = MINIGAME_COVER_TOP() - peekVisibleH;
 
-  for (const s of m.slots) {
-    if (!s.peeking) {
-      if (m.timer >= s.nextPeekAt) {
-        s.peeking = true;
-        s.peekUntil = m.timer + 1.1 + Math.random() * 0.6;
-        s.hasShot = false;
-      }
-    } else {
-      if (!s.hasShot && m.timer >= s.peekUntil - 0.5) {
-        s.hasShot = true;
-        m.syringes.push({ x: s.x, y: peekTop + peekVisibleH * 0.5, vy: H * 0.5 });
-      }
-      if (m.timer >= s.peekUntil) {
-        s.peeking = false;
-        s.nextPeekAt = m.timer + 1.0 + Math.random() * 1.8;
-      }
+  // --- spawn doctor popups at random x along the continuous wall ---
+  if (m.doctors.length < MINIGAME_MAX_CONCURRENT_DOCTORS && m.timer >= m.nextDoctorAt) {
+    let x = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const candidate = W * (MINIGAME_DOCTOR_MARGIN + Math.random() * (1 - 2 * MINIGAME_DOCTOR_MARGIN));
+      if (m.doctors.every(d => Math.abs(d.x - candidate) > dw * 1.4)) { x = candidate; break; }
     }
+    if (x !== null) {
+      m.doctors.push({
+        x,
+        peekUntil: m.timer + 1.1 + Math.random() * 0.7,
+        hasShot: false,
+        willShoot: Math.random() < 0.5, // not every peek throws — keeps it dodgeable
+      });
+    }
+    m.nextDoctorAt = m.timer + 0.9 + Math.random() * 1.3;
   }
 
+  // --- doctors: peek, maybe throw one syringe aimed at wherever she
+  // currently stands (fastest path, i.e. a straight diagonal line), duck back ---
+  for (let i = m.doctors.length - 1; i >= 0; i--) {
+    const d = m.doctors[i];
+    if (!d.hasShot && d.willShoot && m.timer >= d.peekUntil - 0.5) {
+      d.hasShot = true;
+      const throwX = d.x, throwY = peekTop + peekVisibleH * 0.5;
+      const targetX = m.playerX, targetY = MINIGAME_GROUND_Y() - minigamePlayerHeight() * 0.5;
+      const dist = Math.hypot(targetX - throwX, targetY - throwY) || 1;
+      const sSpeed = H * 0.5;
+      m.syringes.push({
+        x: throwX, y: throwY,
+        vx: (targetX - throwX) / dist * sSpeed,
+        vy: (targetY - throwY) / dist * sSpeed,
+      });
+    }
+    if (m.timer >= d.peekUntil) m.doctors.splice(i, 1);
+  }
+
+  // --- cakes fly straight up; hit whichever doctor they overlap ---
   for (let i = m.cakes.length - 1; i >= 0; i--) {
     const c = m.cakes[i];
     c.y -= c.vy * dt;
     if (c.y < -60) { m.cakes.splice(i, 1); continue; }
-    for (const s of m.slots) {
-      if (!s.peeking) continue;
-      if (aabbOverlap(c.x - c.size / 2, c.y - c.size / 2, c.size, c.size, s.x - dw / 2, peekTop, dw, peekVisibleH)) {
+    for (let j = m.doctors.length - 1; j >= 0; j--) {
+      const d = m.doctors[j];
+      if (aabbOverlap(c.x - c.size / 2, c.y - c.size / 2, c.size, c.size, d.x - dw / 2, peekTop, dw, peekVisibleH)) {
         m.hits += 1;
-        s.peeking = false;
-        s.nextPeekAt = m.timer + 1.2 + Math.random() * 1.6;
+        m.doctors.splice(j, 1);
         m.cakes.splice(i, 1);
-        spawnSparkle(s.x, peekTop, 12);
+        spawnSparkle(d.x, peekTop, 12);
         if (m.hits >= MINIGAME_HITS_NEEDED) { m.ending = "win"; m.endTimer = 0; }
         break;
       }
     }
   }
 
+  // --- syringes fly on their aimed diagonal; dodge by moving ---
   const pW = minigamePlayerWidth(), pH = minigamePlayerHeight();
   const pTop = MINIGAME_GROUND_Y() - pH;
   for (let i = m.syringes.length - 1; i >= 0; i--) {
     const sy = m.syringes[i];
+    sy.x += sy.vx * dt;
     sy.y += sy.vy * dt;
-    if (sy.y > H + 80) { m.syringes.splice(i, 1); continue; }
+    if (sy.y > H + 80 || sy.x < -80 || sy.x > W + 80) { m.syringes.splice(i, 1); continue; }
     const sw = H * 0.05, sh = H * 0.05;
     if (aabbOverlap(sy.x - sw / 2, sy.y - sh / 2, sw, sh, m.playerX - pW / 2, pTop, pW, pH)) {
       m.syringes.splice(i, 1);
@@ -1817,11 +1871,16 @@ function updateMinigame(dt) {
       if (m.lives <= 0) { m.ending = "lose"; m.endTimer = 0; }
     }
   }
+
+  // --- out of ammo with no cakes in flight and no way left to reach 6 hits ---
+  if (!m.ending && cakesCollected <= 0 && m.cakes.length === 0 && m.hits < MINIGAME_HITS_NEEDED && m.timer > 1.5) {
+    m.ending = "lose";
+    m.endTimer = 0;
+  }
 }
 
 // draws img cropped (not squashed) to exactly fill dw x dh, like CSS
 // background-size:cover — needed because background_1 is a wide panorama
-// and each hiding slot only gets a narrow sliver of it
 function drawCoverFit(img, dx, dy, dw, dh, hAlign) {
   const srcAspect = img.naturalWidth / img.naturalHeight;
   const destAspect = dw / dh;
@@ -1851,20 +1910,37 @@ function drawMinigame() {
   const peekVisibleH = dh * MINIGAME_PEEK_POKE_FRAC;
   const peekTop = MINIGAME_COVER_TOP() - peekVisibleH;
   const coverH = MINIGAME_COVER_H();
-  const coverW = minigameCoverWidth();
 
-  for (const s of m.slots) {
-    if (s.peeking && imgReady('doctor')) {
-      ctx.drawImage(images.doctor, s.x - dw / 2, peekTop, dw, dh);
-    }
-    if (imgReady(s.coverKey)) {
-      drawCoverFit(images[s.coverKey], s.x - coverW / 2, MINIGAME_COVER_TOP(), coverW, coverH, s.hAlign);
-    }
+  // one continuous mountain wall spanning the full width
+  if (imgReady('background_1')) {
+    drawCoverFit(images.background_1, 0, MINIGAME_COVER_TOP(), W, coverH, 0.5);
+  }
+
+  // doctors peek out from behind the wall...
+  for (const d of m.doctors) {
+    if (imgReady('doctor')) ctx.drawImage(images.doctor, d.x - dw / 2, peekTop, dw, dh);
+  }
+
+  // ...then scattered books/instruments are drawn on top, so a doctor can
+  // end up partly hidden among the clutter too — purely decorative, the
+  // hit zone is unaffected by what's drawn over it
+  for (const dec of m.decor) {
+    if (!imgReady(dec.key)) continue;
+    const decH = coverH * dec.hFrac;
+    const decW = decH * aspectOf(dec.key, 1);
+    const decY = MINIGAME_COVER_TOP() + coverH - decH + dec.yJitter;
+    ctx.drawImage(images[dec.key], dec.x - decW / 2, decY, decW, decH);
   }
 
   for (const sy of m.syringes) {
     const sz = H * 0.065;
-    if (imgReady('spritze')) ctx.drawImage(images.spritze, sy.x - sz / 2, sy.y - sz / 2, sz, sz);
+    if (imgReady('spritze')) {
+      ctx.save();
+      ctx.translate(sy.x, sy.y);
+      ctx.rotate(Math.atan2(sy.vy, sy.vx));
+      ctx.drawImage(images.spritze, -sz / 2, -sz / 2, sz, sz);
+      ctx.restore();
+    }
   }
 
   for (const c of m.cakes) {
@@ -1877,10 +1953,11 @@ function drawMinigame() {
 
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.font = "700 " + (H * 0.032) + "px 'Playfair Display', serif";
+  ctx.font = "700 " + (H * 0.030) + "px 'Playfair Display', serif";
   ctx.fillStyle = "#2b1a0d";
   ctx.fillText("Treffer: " + m.hits + " / " + MINIGAME_HITS_NEEDED, H * 0.03, H * 0.03);
-  ctx.fillText("Leben: " + "❤".repeat(Math.max(0, m.lives)), H * 0.03, H * 0.03 + H * 0.05);
+  ctx.fillText("Leben: " + "❤".repeat(Math.max(0, m.lives)), H * 0.03, H * 0.03 + H * 0.044);
+  ctx.fillText("Kuchen: " + cakesCollected, H * 0.03, H * 0.03 + H * 0.088);
 
   if (m.hitFlash > 0) {
     ctx.fillStyle = "rgba(200,20,20," + (m.hitFlash * 0.5).toFixed(2) + ")";
