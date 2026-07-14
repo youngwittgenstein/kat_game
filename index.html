@@ -502,7 +502,8 @@ const PLAYER_DUCK_H = () => H * 0.14;
 // lets the doctor actually gain ground (see the doctor-AI comment below);
 // playing clean never lets him get faster than her on its own
 const JUMP_FATIGUE_ADD = 0.05;      // per extra (non-first) jump used
-const DUCK_FATIGUE_RATE = 0.05;     // per second spent ducking
+const DUCK_FATIGUE_RATE = 0.05;     // per second spent ducking, once past the grace window
+const DUCK_FATIGUE_GRACE = 0.8;     // seconds of ducking that stay free — a necessary long duck shouldn't cost her
 const FATIGUE_RECOVERY_RATE = 0.09; // per second spent doing neither
 // night makes fatigue harder to shake off — builds faster, recovers
 // slower — for a "hopefully it's day soon" pressure during a hard stretch
@@ -520,6 +521,7 @@ const player = {
   sparkleUntil: 0,
   runPhase: 0,
   fatigue: 0,                // 0-1 — builds from spammed extra jumps / prolonged ducking, recovers otherwise. This is what lets the doctor gain ground, not raw elapsed time.
+  duckHoldTime: 0,           // seconds of continuous ducking — a short duck to clear an overhang stays free
 };
 
 function playerHeight() {
@@ -1027,6 +1029,7 @@ function resetGame() {
   player.mouthOpenUntil = 0;
   player.sparkleUntil = 0;
   player.fatigue = 0;
+  player.duckHoldTime = 0;
 
   doctor.worldX = cameraX + W * PLAYER_SCREEN_X_RATIO - H * 0.62;
 
@@ -1274,12 +1277,18 @@ function update(dt) {
   }
   player.runPhase += dt * (5 + scrollSpeed / H * 4);
 
-  // ducking builds fatigue while held; recovers whenever she's not ducking
-  // (extra jumps add their own chunk directly in tryJump()) — both are
-  // scaled by the day/night cycle, harsher at night
+  // ducking only builds fatigue past DUCK_FATIGUE_GRACE seconds — a duck
+  // long enough to actually be necessary stays free; recovers whenever
+  // she's not ducking (extra jumps add their own chunk in tryJump()) —
+  // both the cost and the recovery are scaled by the day/night cycle,
+  // harsher at night
   if (player.duckHeld) {
-    player.fatigue = Math.min(1, player.fatigue + DUCK_FATIGUE_RATE * fatigueGainMul() * dt);
+    player.duckHoldTime += dt;
+    if (player.duckHoldTime > DUCK_FATIGUE_GRACE) {
+      player.fatigue = Math.min(1, player.fatigue + DUCK_FATIGUE_RATE * fatigueGainMul() * dt);
+    }
   } else {
+    player.duckHoldTime = 0;
     player.fatigue = Math.max(0, player.fatigue - FATIGUE_RECOVERY_RATE * fatigueRecoveryMul() * dt);
   }
 
