@@ -1018,6 +1018,20 @@ function resetGame() {
   updateScoreDisplay();
 }
 
+// tears down the looping 26th-birthday video/audio so it can't keep
+// playing behind the game after a retry — pausing alone isn't enough on
+// some mobile browsers, so the media element is fully detached
+function stopEgg26Video() {
+  const box = document.getElementById("egg26PhotoBox");
+  const video = box.querySelector("video");
+  if (video) {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
+  box.innerHTML = "";
+}
+
 function beginIntro() {
   resetGame();
   state = "intro";
@@ -1026,6 +1040,7 @@ function beginIntro() {
   document.getElementById("gameOverScreen").classList.add("hidden");
   document.getElementById("egg26Panel").classList.remove("show");
   document.getElementById("hud").classList.add("hidden");
+  stopEgg26Video(); // the 26th-birthday video loops — "Nochmal?" must not leave it playing behind the game
   try { getAudioCtx().resume(); } catch (e) {}
   playStinger();
   lastTime = performance.now();
